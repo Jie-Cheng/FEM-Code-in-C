@@ -1,0 +1,54 @@
+# Abaqus Input files
+*.inp
+
+# Abaqus Output files
+*.rpt
+
+# Matlab intermediate files
+*.m~
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+mixed_main
+reduced_main
+full_main
+compute_poisson_ratio
+pre_preocessing
+
+# My Input Files
+.DS_Store
+
+# LaTex files
+*.aux
+*.log
+*.out
+*.spl
+*.gz
+*.toc
+*.pdf
