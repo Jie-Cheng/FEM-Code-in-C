@@ -3,6 +3,7 @@
 
 
 int IntNum(const int nsd, const int nen) {
+    // The number of integration points in an element
     int n;
     if (nsd == 1) {
         if (nen == 2) {
@@ -26,6 +27,7 @@ int IntNum(const int nsd, const int nen) {
 
 
 void IntWeights(const int nsd, const int nen, const int npt, double p[npt]) {
+    // The weights of integration points
     if (nsd == 1) {
         if (npt == 2) {
             p[0] = 1.0;
@@ -70,6 +72,7 @@ void IntWeights(const int nsd, const int nen, const int npt, double p[npt]) {
 
 
 void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) {
+    // The coordinates of the integration points
     int i, j;
     for (i = 0; i < npt; ++i) {
         for (j = 0; j < nsd; ++j) {
@@ -80,7 +83,7 @@ void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) 
     if (nsd == 1) {
         if (npt == 2) {
             p[0][0] = -temp;
-            p[0][1] = temp;
+            p[1][0] = temp;
         }
     } else if (nsd == 2) {
         if (nen == 3) {

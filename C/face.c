@@ -3,6 +3,7 @@
 
 
 int FaceNum(const int nsd, const int nen) {
+    // The number of faces in an element.
     int n;
     if (nsd == 2) {
         if (nen == 3) n = 3;
@@ -15,6 +16,7 @@ int FaceNum(const int nsd, const int nen) {
 }
 
 int FaceNumNodes(const int nsd, const int nen) {
+    // The number of nodes on a face
     int n;
     if (nsd == 2) {
         if (nen == 3 || nen == 4) n = 2;
@@ -27,8 +29,9 @@ int FaceNumNodes(const int nsd, const int nen) {
 }
 
 
-void FaceNodes(const int num_nodes, double p[num_nodes], const int face, \
-    const int nsd, const int nen) {
+void FaceNodes(const int nsd, const int nen, const int face, \
+    const int num_nodes, double p[num_nodes]) {
+    // The ids of the nodes on a face
     int i3[] = {2, 3, 1};
     int i4[] = {2, 3, 4, 1};
     if (nsd == 2) {
