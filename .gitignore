@@ -43,6 +43,7 @@ pre_preocessing
 
 # My Input Files
 .DS_Store
+*.txt
 
 # LaTex files
 *.aux

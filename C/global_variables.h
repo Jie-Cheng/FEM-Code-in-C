@@ -1,19 +1,19 @@
 #ifndef GLOBAL_VARIABLES_H
 #define GLOBAL_VARIABLES_H
 
-extern int mode, maxit, nsteps, nprint, step, isbinary;
-extern double inistep, adjust, tol, dt, damp, penalty;
-extern int materialtype;
-extern double materialprops[5];
-extern double gravity[3];
-extern int nsd, nen, nn, nel;
-extern int** connect;
-extern double** coords;
-extern int** bc_num;
-extern double* bc_val;
-extern int** load_num;
-extern double** load_val;
-extern int* share;
+int mode, maxit, nsteps, nprint, step, isbinary;
+double inistep, adjust, tol, dt, damp, penalty;
+int materialtype;
+double materialprops[5];
+double gravity[3];
+int nsd, nen, nn, nel;
+int** connect;
+double** coords;
+int** bc_num;
+double* bc_val;
+int** load_num;
+double** load_val;
+int* share;
 
 
 #endif
