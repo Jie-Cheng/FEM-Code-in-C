@@ -27,7 +27,7 @@ void ReadInput() {
                 k++;
                 std::string val;
                 for (int m = j + 1; m < inputs[i].size(); ++m) val += inputs[i][m];
-                if ( k == 1 || k == 2 || k == 5 || k == 8 || k == 10 || k == 15) {
+                if ( k == 1 || k == 2 || k == 5 || k == 9 || k == 11 || k == 13) {
                     ints.push_back(atoi(val.c_str()));
                 } else {
                     dous.push_back(atof(val.c_str()));
@@ -40,16 +40,16 @@ void ReadInput() {
     isbinary = ints[1];
     tol = dous[0];
     penalty = dous[1];
+    gravity[0] = dous[2];
+    gravity[1] = dous[3];
+    gravity[2] = dous[4];
     maxit = ints[2];
-    inistep = dous[2];
-    adjust = dous[3];
+    inistep = dous[5];
+    adjust = dous[6];
     nsteps = ints[3];
-    dt = dous[4];
+    dt = dous[7];
     nprint = ints[4];
-    damp = dous[5];
-    gravity[0] = dous[6];
-    gravity[1] = dous[7];
-    gravity[2] = dous[8];
+    damp = dous[8];
     materialtype = ints[5];
     materialprops[0] = dous[9];
     materialprops[1] = dous[10];

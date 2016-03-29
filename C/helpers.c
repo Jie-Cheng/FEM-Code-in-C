@@ -41,7 +41,7 @@ double Determinant(const double** a, const int n) {
 
 // Calculates C = alpha*A*B + beta*C
 // A[m][k] B[k][n] C[m][n] are originally 2d row-major matrices
-void MatMul(int m, int n, int k, double alpha, double beta, double* A, double* B, double* C){
+void MatMul(char transa, char transb, int m, int n, int k, double alpha, double beta, double* A, double* B, double* C){
 	// Change to column-major
 	double *AT, *BT, *CT;
 	int i, j, pos1, pos2;
@@ -72,7 +72,7 @@ void MatMul(int m, int n, int k, double alpha, double beta, double* A, double* B
 			CT[pos2] = CT[pos1];
 		}
 	}
-	DGEMM_("N", "N", &m, &n, &k, &alpha, AT, &lda, BT, &ldb, &beta, CT, &ldc);
+	DGEMM_(&transa, &transb, &m, &n, &k, &alpha, AT, &lda, BT, &ldb, &beta, CT, &ldc);
 	// Change the result to row-major
 	for (i = 0; i < m; ++i) {
 		for (j = 0; j < n; ++j) {
@@ -84,4 +84,13 @@ void MatMul(int m, int n, int k, double alpha, double beta, double* A, double* B
 	free(AT);
 	free(BT);
 	free(CT);
+}
+
+// Dot product
+double DotProduct(int n, double a[n], double b[n]) {
+	int i;
+	double result = 0.0;
+	for (i = 0; i < n; ++i) {
+		result += a[i]*b[i];
+	}
 }
