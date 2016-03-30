@@ -28,7 +28,7 @@ void Cross3d(double* a, double* b, double* c) {
 }
 
 // Determinant of 2X2 or 3X3 matrix
-double Determinant(const double** a, const int n) {
+double Determinant(const int n, const double a[n][n]) {
 	double det;
 	if (n == 2) {
 		det = a[0][0]*a[1][1] - a[0][1]*a[1][0];
@@ -42,55 +42,90 @@ double Determinant(const double** a, const int n) {
 // Calculates C = alpha*A*B + beta*C
 // A[m][k] B[k][n] C[m][n] are originally 2d row-major matrices
 void MatMul(char transa, char transb, int m, int n, int k, double alpha, double beta, double* A, double* B, double* C){
-	// Change to column-major
-	double *AT, *BT, *CT;
+	int lda, ldb, ldc;
 	int i, j, pos1, pos2;
-	int lda = 2*m;
-	int ldb = 2*k;
-	int ldc = 2*m;
-	AT = calloc(lda*k, sizeof(double));
-	BT = calloc(ldb*n, sizeof(double));
-	CT = calloc(ldc*n, sizeof(double));
-	for (i = 0; i < m; ++i) {
-		for (j = 0; j < k; ++j) {
-			pos1 = k*i + j;
-			pos2 = lda*j + i;
-			AT[pos2] = A[pos1];
+	int ka, kb;
+
+	ldc = 2*m;
+
+	if (transa == 'N') {
+		lda = 2*m;
+		ka = k;
+	} else if (transa == 'T') {
+		lda = 2*k;
+		ka = m;
+	}
+
+	if (transb == 'N') {
+		ldb = 2*k;
+		kb = n;
+	} else if (transb == 'T') {
+		ldb = 2*n;
+		kb = k;
+	}
+
+	double OA[lda*ka], OB[ldb*kb], OC[ldc*n];
+
+	if (transa == 'N') {
+		// A is m by k
+		// Change order because of C/FORTRAN difference
+		for (i = 0; i < m; ++i) {
+			for (j = 0; j < k; ++j) {
+				pos1 = k*i + j;
+				pos2 = lda*j + i;
+				OA[pos2] = A[pos1];
+			}
+		}
+	} else if (transa == 'T') {
+		// A is k by m
+		// Do not change
+		for (i = 0; i < k; ++i) {
+			for (j = 0; j < m; ++j) {
+				pos1 = m*i + j;
+				pos2 = lda*j + i;
+				OA[pos2] = A[pos1];
+			}
 		}
 	}
-	for (i = 0; i < k; ++i) {
-		for (j = 0; j < n; ++j) {
-			pos1 = n*i + j;
-			pos2 = ldb*j + i;
-			BT[pos2] = B[pos1];
+
+	if (transb == 'N') {
+		// B is k by n
+		for (i = 0; i < k; ++i) {
+			for (j = 0; j < n; ++j) {
+				pos1 = n*i + j;
+				pos2 = ldb*j + i;
+				OB[pos2] = B[pos1];
+			}
+		}
+	} else if (transb == 'T') {
+		// B is n by k
+		for (i = 0; i < n; ++i) {
+			for (j = 0; j < k; ++j) {
+				pos1 = k*i + j;
+				pos2 = ldb*j + i;
+				OB[pos2] = B[pos1];
+			}
 		}
 	}
-	for (i = 0; i < m; ++i) {
-		for (j = 0; j < n; ++j) {
-			pos1 = n*i + j;
-			pos2 = ldc*j + i;
-			CT[pos2] = CT[pos1];
-		}
-	}
-	DGEMM_(&transa, &transb, &m, &n, &k, &alpha, AT, &lda, BT, &ldb, &beta, CT, &ldc);
+
+	DGEMM_(&transa, &transb, &m, &n, &k, &alpha, OA, &lda, OB, &ldb, &beta, OC, &ldc);
+
 	// Change the result to row-major
 	for (i = 0; i < m; ++i) {
 		for (j = 0; j < n; ++j) {
 			pos1 = n*i + j;
 			pos2 = ldc*j + i;
-			C[pos1] = CT[pos2];
+			C[pos1] = OC[pos2];
 		}
 	}
-	free(AT);
-	free(BT);
-	free(CT);
 }
 
 // Dot product
-double DotProduct(int n, double a[n], double b[n]) {
+double DotProduct(const int n, const double a[n], const double b[n]) {
 	int i;
 	double result = 0.0;
 	for (i = 0; i < n; ++i) {
 		result += a[i]*b[i];
 	}
+	return result;
 }
