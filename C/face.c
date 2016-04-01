@@ -29,18 +29,18 @@ int FaceNumNodes(const int nsd, const int nen) {
 }
 
 
-void FaceNodes(const int nsd, const int nen, const int face, \
-    const int num_nodes, double p[num_nodes]) {
+void FaceNodes(const int nsd, const int nen, const int nfacenodes, const int face, int p[nfacenodes]) {
     // The ids of the nodes on a face
+    // Assuming p[FaceNumNodes(nsd, nen)]
     int i3[] = {2, 3, 1};
     int i4[] = {2, 3, 4, 1};
     if (nsd == 2) {
         if (nen == 3) {
             p[0] = face;
-            p[1] = i3[face];
+            p[1] = i3[face-1];
         } else if (nen == 4) {
             p[0] = face;
-            p[1] = i4[face];
+            p[1] = i4[face-1];
         }
     } else if (nsd == 3) {
         if (nen == 4) {

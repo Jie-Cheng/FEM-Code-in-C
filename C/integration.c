@@ -2,24 +2,44 @@
 #include <math.h>
 
 
-int IntNum(const int nsd, const int nen) {
+int IntNum(const int nsd, const int nen, const int isreduced) {
     // The number of integration points in an element
     int n;
-    if (nsd == 1) {
-        if (nen == 2) {
-            n = 2;
+    if (!isreduced) {
+        if (nsd == 1) {
+            if (nen == 2) {
+                n = 2;
+            }
+        } else if (nsd == 2) {
+            if (nen == 3) {
+                n = 1;
+            } else if (nen == 4) {
+                n = 4;
+            }
+        } else if (nsd == 3) {
+            if (nen == 4) {
+                n = 1;
+            } else if (nen == 8) {
+                n = 8;
+            }
         }
-    } else if (nsd == 2) {
-        if (nen == 3) {
-            n = 1;
-        } else if (nen == 4) {
-            n = 4;
-        }
-    } else if (nsd == 3) {
-        if (nen == 4) {
-            n = 1;
-        } else if (nen == 8) {
-            n = 8;
+    } else {
+        if (nsd == 1) {
+            if (nen == 2) {
+                n = 2;
+            }
+        } else if (nsd == 2) {
+            if (nen == 3) {
+                n = 1;
+            } else if (nen == 3) {
+                n = 1;
+            }
+        } else if (nsd == 3) {
+            if (nen == 4) {
+                n = 1;
+            } else if (nen == 8) {
+                n = 1;
+            }
         }
     }
     return n;

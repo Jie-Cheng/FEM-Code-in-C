@@ -51,10 +51,10 @@ void ShapeDer(const int nsd, double xi[nsd], const int nen, double p[nen][nsd]) 
             p[0][0] =  1.0;
             p[0][1] =  0.0;
 
-            p[1][0] = -1.0;
-            p[1][1] =  0.0;
+            p[1][0] =  0.0;
+            p[1][1] =  1.0;
             
-            p[2][0] =  1.0;
+            p[2][0] = -1.0;
             p[2][1] = -1.0;
         } else if (nen == 4) {
             p[0][0] = -0.25 * (1.0 - xi[1]);

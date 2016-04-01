@@ -1,5 +1,5 @@
 #include "helpers.h"
-#include <stdlib.h>
+#include <math.h>
 
 extern void DGETRF_(int* M, int *N, double* A, int* LDA, int* IPIV, int* INFO);
 extern void DGETRI_(int* N, double* A, int* LDA, int* IPIV, double* WORK, int* LWORK, int* INFO);
@@ -8,7 +8,7 @@ extern void DGEMM_(char* TRANSA, char* TRANSB, int* M, int* N, int* K, \
 
 // Find the inverse of a matrix.
 // A is a vectorized matrix, whose original size is N by N.
-void Inverse(double* A, int N) {
+void Inverse(int N, double* A) {
 	int IPIV[N];
     int LWORK = 2*N;
     double WORK[LWORK];
@@ -20,15 +20,15 @@ void Inverse(double* A, int N) {
 
 
 // Find the cross product of two vectors.
-// Assuming a, b, c are of size 3.
-void Cross3d(double* a, double* b, double* c) {
+void Cross3d(double a[3], double b[3], double c[3]) {
 	c[0] = a[1]*b[2] - a[2]*b[1];
 	c[1] = a[2]*b[0] - a[0]*b[2];
 	c[2] = a[0]*b[1] - a[1]*b[0];
 }
 
 // Determinant of 2X2 or 3X3 matrix
-double Determinant(const int n, const double a[n][n]) {
+double Determinant(const int n, double a[n][n]) {
+	// Assuming a[n][n]
 	double det;
 	if (n == 2) {
 		det = a[0][0]*a[1][1] - a[0][1]*a[1][0];
@@ -108,6 +108,17 @@ void MatMul(char transa, char transb, int m, int n, int k, double alpha, double 
 		}
 	}
 
+	if (fabs(beta) > 1e-5) {
+		for (i = 0; i < m; ++i) {
+			for (j = 0; j < n; ++j) {
+				pos1 = n*i + j;
+				pos2 = ldc*j + i;
+				OC[pos2] = C[pos1];
+			}
+		}
+	}
+	
+
 	DGEMM_(&transa, &transb, &m, &n, &k, &alpha, OA, &lda, OB, &ldb, &beta, OC, &ldc);
 
 	// Change the result to row-major
@@ -121,7 +132,8 @@ void MatMul(char transa, char transb, int m, int n, int k, double alpha, double 
 }
 
 // Dot product
-double DotProduct(const int n, const double a[n], const double b[n]) {
+double DotProduct(const int n, double* a, double* b) {
+	// Assuming a[n], b[n]
 	int i;
 	double result = 0.0;
 	for (i = 0; i < n; ++i) {

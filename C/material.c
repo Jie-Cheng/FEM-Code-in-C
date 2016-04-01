@@ -4,7 +4,7 @@
 
 // Computes the 4th-order spatial tensor of elasiticity at the integration point
 void MaterialStiffness(int nsd, double intcoord[nsd], double F[nsd][nsd], \
-	double pressure, int materialtype, double* materialprops, double mstiff[nsd][nsd][nsd][nsd]) {
+	double pressure, int materialtype, double materialprops[5], double mstiff[nsd][nsd][nsd][nsd]) {
 	int i, j, k, l;
 	
 	for (i = 0; i < nsd; ++i) {
@@ -67,8 +67,8 @@ void MaterialStiffness(int nsd, double intcoord[nsd], double F[nsd][nsd], \
 					for (l = 0; l < nsd; ++l) {
 						mstiff[i][j][k][l] = (8*c2 + 24*c3*(I1 - 3))*Bbar[i][j]*Bbar[k][l] \
 						- (4/3.*c1 + (16/3.*I1 - 8)*c2 + 12*(I1 - 1)*(I1 - 3)*c3)*(DELTA(i, j)*Bbar[k][l] + DELTA(k, l)*Bbar[i][j]) \
-						+ (4/9.*I1*c1 + (16/9.*I1*I1 - 8/3.*I1)*c2 + 4*I1*(I1 - 3)*(I1 - 3)*c3)*DELTA(i, j)*DELTA(k, l) \
-						+ (2/3.*I1*c1 + 4/3.*I1*(I1 - 3)*c2 + (2*I1*(I1 - 3)*(I1 - 3))*c3)* \
+						+ (4/9.*I1*c1 + (16/9.*I1*I1 - 8/3.*I1)*c2 + 4*I1*(I1 - 1)*(I1 - 3)*c3)*DELTA(i, j)*DELTA(k, l) \
+						+ (2/3.*I1*c1 + 4/3.*I1*(I1 - 3)*c2 + 2*I1*(I1 - 3)*(I1 - 3)*c3)* \
 							(DELTA(i, k)*DELTA(j, l) + DELTA(i, l)*DELTA(j, k))
 						+ (DELTA(i, j)*DELTA(k, l) - (DELTA(i, k)*DELTA(j, l) + DELTA(i, l)*DELTA(j, k)))*J*pressure;
 					}
@@ -79,13 +79,13 @@ void MaterialStiffness(int nsd, double intcoord[nsd], double F[nsd][nsd], \
 		// Holzapfel-Gasser-Ogden Model
 		double kappa = materialprops[1];
 		double mu1 = materialprops[2];
+		double k1 = materialprops[3];
+		double k2 = materialprops[4];
 		// These material constants are hard-coded
 		double beta = 50*3.14159265/180.0;
 		double R = sqrt( (1 + pow(tan(beta), 2)) * (pow(intcoord[0], 2) + pow(intcoord[1], 2)) );
 		double a0[nsd]; // assign manually
 		double g0[nsd]; // assign manually
-		double k1 = 0.5158e6;
-		double k2 = 0.9;
 
 		double a[nsd], g[nsd], temp[nsd];
 		double C[nsd][nsd];
@@ -139,15 +139,13 @@ void MaterialStiffness(int nsd, double intcoord[nsd], double F[nsd][nsd], \
 
 // Computes the Kirchhoff stress at the integration point
 void KirchhoffStress(int nsd, double intcoord[nsd], double F[nsd][nsd], double pressure, \
-	int materialtype, double* materialprops, double stress[nsd][nsd]) {
-
+	int materialtype, double materialprops[5], double stress[nsd][nsd]) {
 	int i, j;
 	for (i = 0; i < nsd; ++i) {
 		for (j = 0; j < nsd; ++j) {
 			stress[i][j] = 0.0;
 		}
 	}
-
 	// I1 I2 are actually I1bar I2bar respectively
 	double I1, I2, J;
 	double Bbar[nsd][nsd], BB[nsd][nsd];
@@ -192,13 +190,13 @@ void KirchhoffStress(int nsd, double intcoord[nsd], double F[nsd][nsd], double p
 		// Holzapfel-Gasser-Ogden Model
 		double kappa = materialprops[1];
 		double mu1 = materialprops[2];
+		double k1 = materialprops[3];
+		double k2 = materialprops[4];
 		// These material constants are hard-coded
 		double beta = 50*3.14159265/180.0;
 		double R = sqrt( (1 + pow(tan(beta), 2)) * (pow(intcoord[0], 2) + pow(intcoord[1], 2)) );
 		double a0[nsd]; // assign manually
 		double g0[nsd]; // assign manually
-		double k1 = 0.5158e6;
-		double k2 = 0.9;
 
 		double a[nsd], g[nsd], temp[nsd];
 		double C[nsd][nsd];

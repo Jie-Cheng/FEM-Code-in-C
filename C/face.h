@@ -3,7 +3,6 @@
 
 int FaceNum(const int nsd, const int nen);
 int FaceNumNodes(const int nsd, const int nen);
-void FaceNodes(const int nsd, const int nen, const int face, \
-    const int num_nodes, double p[num_nodes]);
+void FaceNodes(const int nsd, const int nen, const int nfacenodes, const int face, int p[nfacenodes]);
 
 #endif

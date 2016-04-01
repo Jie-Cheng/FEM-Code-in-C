@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <math.h>
 #include "internal_force.h"
 #include "helpers.h"
@@ -8,14 +7,14 @@
 
 void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 	double coords[nn][nsd], int connect[nel][nen], int materialtype, \
-	double* materialprops, double fglo[nn*nsd+nel]) {
+	double materialprops[5], double fglo[nn*nsd+nel]) {
 
 	int i, j, k, l, ele, row;
 	double kappa = materialprops[1];
 
 	for (i = 0; i < nn*nsd+nel; ++i) fglo[i] = 0.;
 
-	int npt = IntNum(nsd, nen); // Number of integration points
+	int npt = IntNum(nsd, nen, 0); // Number of integration points
 	double xilist[npt][nsd]; // Natural coordinates of the integration points
 	IntPoints(nsd, nen, npt, xilist);
 	double weights[npt]; // Weights of the integration points
@@ -43,11 +42,11 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 			double N[nen]; // The nodal values of the shape functions
 			ShapeFun(nen, N, nsd, xilist[intpt]);
 			double intcoord[nsd];
-			MatMul('N', 'N', nen, 1, nsd, 1.0, 0.0, elecoord[0], N, intcoord);
+			MatMul('T', 'N', nsd, 1, nen, 1.0, 0.0, elecoord[0], N, intcoord); // MatMulVec(elecoord^T, N)
 			double dNdxi[nen][nsd];
 			ShapeDer(nsd, xilist[intpt], nen, dNdxi);
 			double dxdxi[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, elecoord[0], dNdxi[0], dxdxi[0]);
+			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, elecoord[0], dNdxi[0], dxdxi[0]); // MatMulMat(elecoord^T, dNdxi)
 			double det = Determinant(nsd, dxdxi);
 			double dxidx[nsd][nsd];
 			for (i = 0; i < nsd; ++i) {
@@ -55,11 +54,16 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 					dxidx[i][j] = dxdxi[i][j];
 				}
 			}
-			Inverse(dxidx[0], nsd);
+			Inverse(nsd, dxidx[0]);
 			double dNdx[nen][nsd];
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdxi[0], dxidx[0], dNdx[0]);
+			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdxi[0], dxidx[0], dNdx[0]); // MatMulMat(dNdxi, dxidx)
 			double F[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, eledof[0], dNdx[0], F[0]);
+			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, eledof[0], dNdx[0], F[0]); // eye + MatMul(eledof^T, dNdx)
+			for (i = 0; i < nsd; ++i) {
+				for (j = 0; j < nsd; ++j) {
+					F[i][j] += 1.0;
+				}
+			}
 			double J = Determinant(nsd, F);
 			double stress[nsd][nsd];
 			KirchhoffStress(nsd, intcoord, F, pressure, materialtype, materialprops, stress);
@@ -69,9 +73,9 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 					Finv[i][j] = F[i][j];
 				}
 			}
-			Inverse(Finv[0], nsd);
-			double dNdy[nen][nsd];
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdx[0], Finv[0], dNdy[0]);
+			Inverse(nsd, Finv[0]);
+			double dNdy[nen][nsd]; 
+			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdx[0], Finv[0], dNdy[0]); // MatMul(dNdx, Finv)
 			// Element internal force
 			for (l = 0; l < nen; ++l) {
 				for (i = 0; i < nsd; ++i) {

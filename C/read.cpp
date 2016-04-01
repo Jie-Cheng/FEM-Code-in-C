@@ -92,11 +92,10 @@ void ReadMesh() {
         if (!inbc.good()){
             std::cerr << "Couldn't open file: bc.txt\n";
         }
-        int temp;
-        inbc >> temp;
-        bc_num = (int**)calloc(temp, sizeof(int*));
-        bc_val = (double*)calloc(temp, sizeof(double));
-        for (int i = 0; i < temp; ++i) {
+        inbc >> bc_size;
+        bc_num = (int**)calloc(bc_size, sizeof(int*));
+        bc_val = (double*)calloc(bc_size, sizeof(double));
+        for (int i = 0; i < bc_size; ++i) {
             bc_num[i] = (int*)calloc(2, sizeof(int));
             inbc >> bc_num[i][0] >> bc_num[i][1] >> bc_val[i];
         }
@@ -105,14 +104,15 @@ void ReadMesh() {
         if (!inload.good()){
             std::cerr << "Couldn't open file: load.txt\n";
         }
-        int temp2;
-        inload >> temp >> temp2;
-        load_num = (int**)calloc(temp, sizeof(int*));
-        load_val = (double**)calloc(temp, sizeof(double*));
-        for (int i = 0; i < temp; ++i) {
+        int load_type;
+        inload >> load_size >> load_type;
+        load_type -= 2;
+        load_num = (int**)calloc(load_size, sizeof(int*));
+        load_val = (double**)calloc(load_size, sizeof(double*));
+        for (int i = 0; i < load_size; ++i) {
             load_num[i] = (int*)calloc(2, sizeof(int));
-            load_val[i] = (double*)calloc(temp2-2, sizeof(double));
-            for (int j = 0; j < temp2; ++j) {
+            load_val[i] = (double*)calloc(load_type, sizeof(double));
+            for (int j = 0; j < load_type; ++j) {
                 if (j < 2) inload >> load_num[i][j];
                 else inload >> load_val[i][j-2];
             }
