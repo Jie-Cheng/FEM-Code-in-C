@@ -1,18 +1,20 @@
 #include <math.h>
-#include "internal_force.h"
+#include "tangent_stiffness.h"
 #include "helpers.h"
 #include "shape.h"
 #include "integration.h"
 #include "material.h"
 
-void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
+void InternalTangent(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 	double coords[nn][nsd], int connect[nel][nen], int materialtype, \
-	double materialprops[5], double fglo[nn*nsd+nel]) {
+	double materialprops[5], double kglo[nn*nsd+nel][nn*nsd+nel]) {
 
-	int i, j, k, l, ele, row;
+	int i, j, k, l, a, b, ele, row, col;
 	double kappa = materialprops[1];
 
-	for (i = 0; i < nn*nsd+nel; ++i) fglo[i] = 0.;
+	for (i = 0; i < nn*nsd+nel; ++i)
+		for (j = 0; j < nn*nsd+nel; ++j)
+			kglo[i][j] = 0.0;
 
 	int npt = IntNum(nsd, nen, 0); // Number of integration points
 	double xilist[npt][nsd]; // Natural coordinates of the integration points
@@ -23,11 +25,9 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 	double elecoord[nen][nsd]; // Coordinates of the nodes in the element
 	double eledof[nen][nsd]; // Displacements of the nodes in the element
 	double pressure; // Pressure of the element
-	double fele[nen*nsd+1]; // Element internal force
-	
-	// Loop over elements
+	double kele[nen*nsd+1][nen*nsd+1]; // Element internal tangent stiffness
+
 	for (ele = 0; ele < nel; ++ele) {
-		// Extract coords of coords of the nodes and the dofs of the element
 		for (i = 0; i < nen; ++i) {
 			for (j = 0; j < nsd; ++j) {
 				elecoord[i][j] = coords[connect[ele][i]-1][j];
@@ -35,8 +35,11 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 			}
 		}
 		pressure = dofs[nsd*nn+ele];
-		for (i = 0; i < nen*nsd+1; ++i) fele[i] = 0.;
-		// Loop over the integration points
+		for (i = 0; i < nen*nsd+1; ++i) {
+			for (j = 0; j < nen*nsd+1; ++j) {
+				kele[i][j] = 0.0;
+			}
+		}
 		int intpt;
 		for (intpt = 0; intpt < npt; ++intpt) {
 			double N[nen]; // The nodal values of the shape functions
@@ -64,9 +67,6 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 					F[i][j] += 1.0;
 				}
 			}
-			double J = Determinant(nsd, F);
-			double stress[nsd][nsd];
-			KirchhoffStress(nsd, intcoord, F, pressure, materialtype, materialprops, stress);
 			double Finv[nsd][nsd];
 			for (i = 0; i < nsd; ++i) {
 				for (j = 0; j < nsd; ++j) {
@@ -76,25 +76,47 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 			Inverse(nsd, Finv[0]);
 			double dNdy[nen][nsd]; 
 			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdx[0], Finv[0], dNdy[0]); // MatMul(dNdx, Finv)
-			// Element internal force
-			for (l = 0; l < nen; ++l) {
+			double J = Determinant(nsd, F);
+			double stress[nsd][nsd];
+			KirchhoffStress(nsd, intcoord, F, pressure, materialtype, materialprops, stress);
+			double C[nsd][nsd][nsd][nsd];
+			MaterialStiffness(nsd, intcoord, F, pressure, materialtype, materialprops, C);
+			for (a = 0; a < nen; ++a) {
 				for (i = 0; i < nsd; ++i) {
-					row = nsd*l + i;
-					for (j = 0; j < nsd; ++j) {
-						fele[row] += stress[i][j]*dNdy[l][j]*weights[intpt]*det;
+					row = a*nsd + i;
+					for (b = 0; b < nen; ++b) {
+						for (k = 0; k < nsd; ++k) {
+							col = b*nsd + k;
+							for (j = 0; j < nsd; ++j) {
+								for (l = 0; l < nsd; ++l) {
+									kele[row][col] += (DELTA(i, k)*stress[j][l] + \
+										C[i][j][k][l])*dNdy[a][j]*dNdy[b][l]*weights[intpt]*det;
+								}
+							}
+						}
 					}
+					col = nen*nsd;
+					kele[row][col] += dNdy[a][i]*J*weights[intpt]*det;
+					kele[col][row] = kele[row][col];
 				}
 			}
-			fele[nen*nsd] += (J - 1 - pressure/kappa)*weights[intpt]*det;
+			kele[nen*nsd][nen*nsd] -= 1/kappa*weights[intpt]*det;
 		}
 		// Scatter
-		for (l = 0; l < nen; ++l) {
+		for (a = 0; a < nen; ++a) {
 			for (i = 0; i < nsd; ++i) {
-				row = nsd*(connect[ele][l] - 1) + i;
-				fglo[row] += fele[nsd*l + i];
+				row = nsd*(connect[ele][a]-1) + i;
+				for (b = 0; b < nen; ++b) {
+					for (k = 0; k < nsd; ++k) {
+						col = nsd*(connect[ele][b]-1) + k;
+						kglo[row][col] += kele[nsd*a+i][nsd*b+k];
+					}
+				}
+				col = nsd*nn + ele;
+				kglo[row][col] += kele[nsd*a+i][nsd*nen];
+				kglo[col][row]  = kglo[row][col];
 			}
 		}
-		row = nn*nsd + ele;
-		fglo[row] += fele[nsd*nen];	
-	}	
-}
+		kglo[nsd*nn+ele][nsd*nn+ele] += kele[nsd*nen][nsd*nen];
+	}
+} 

@@ -132,8 +132,7 @@ void MatMul(char transa, char transb, int m, int n, int k, double alpha, double 
 }
 
 // Dot product
-double DotProduct(const int n, double* a, double* b) {
-	// Assuming a[n], b[n]
+double DotProduct(const int n, double a[n], double b[n]) {
 	int i;
 	double result = 0.0;
 	for (i = 0; i < n; ++i) {

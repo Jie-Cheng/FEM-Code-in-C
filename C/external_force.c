@@ -42,7 +42,7 @@ void ExternalPressure(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel]
 			double dNdxi[nfacenodes][nsd-1];
 			double N[nfacenodes];
 			double dydxi[nsd][nsd-1];
-			ShapeFun(nfacenodes, N, nsd-1, xilist[intpt]);
+			ShapeFun(nsd-1, xilist[intpt], nfacenodes, N);
 			ShapeDer(nsd-1, xilist[intpt], nfacenodes, dNdxi);
 			MatMul('T', 'N', nsd, nsd-1, nfacenodes, 1.0, 0.0, facecoord[0], dNdxi[0], dydxi[0]); // MatMulMat((facecoord+facedof)^T, dNdxi)
 			MatMul('T', 'N', nsd, nsd-1, nfacenodes, 1.0, 1.0, facedof[0], dNdxi[0], dydxi[0]);
@@ -113,7 +113,7 @@ void ExternalTraction(int nsd, int nn, int nel, int nen, double coords[nn][nsd],
 			double dNdxi[nfacenodes][nsd-1];
 			double N[nfacenodes];
 			double dxdxi[nsd][nsd-1];
-			ShapeFun(nfacenodes, N, nsd-1, xilist[intpt]);
+			ShapeFun(nsd-1, xilist[intpt], nfacenodes, N);
 			ShapeDer(nsd-1, xilist[intpt], nfacenodes, dNdxi);
 			MatMul('T', 'N', nsd, nsd-1, nfacenodes, 1.0, 0.0, facecoord[0], dNdxi[0], dxdxi[0]); // MatMulMat(facecoord^T, dNdxi)
 			double det;
@@ -170,7 +170,7 @@ void ExternalGravity(int nsd, int nn, int nel, int nen, double coords[nn][nsd], 
 			double dNdxi[nen][nsd];
 			double N[nen];
 			double dxdxi[nsd][nsd];
-			ShapeFun(nen, N, nsd, xilist[intpt]);
+			ShapeFun(nsd, xilist[intpt], nen, N);
 			ShapeDer(nsd, xilist[intpt], nen, dNdxi);
 			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, elecoord[0], dNdxi[0], dxdxi[0]); // MatMulMat(elecoord^T, dNdxi)
 			double det = Determinant(nsd, dxdxi);
