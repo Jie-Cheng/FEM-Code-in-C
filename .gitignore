@@ -35,9 +35,7 @@
 *.exe
 *.out
 *.app
-mixed_main
-reduced_main
-full_main
+main
 compute_poisson_ratio
 pre_preocessing
 

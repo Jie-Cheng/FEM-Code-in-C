@@ -2,19 +2,23 @@ module read_file
 	
 	implicit none
 	
-	integer :: mode, maxit, nsteps, nprint, step, isbinary
+	integer :: mode, maxit, nsteps, nprint, step, isbinary, materialtype
 	real(8) :: firststep, adjust, tol, dt, damp, penalty
 	real(8) :: materialprops(5), gravity(3)
-	integer :: nsd, nen, nn, nel, ned
-	integer, allocatable :: connect(:,:)
-	real(8), allocatable :: coords(:,:), bc2(:,:), bc1(:,:)
+	integer :: nsd, nen, nn, nel, bc_size, load_size, load_type
+	integer, allocatable :: connect(:, :), bc_num(:, :), load_num(:, :)
+	real(8), allocatable :: coords(:, :), bc_val(:), load_val(:, :)
 	integer, allocatable :: share(:)
+	
+	integer :: NE
+	integer, allocatable :: IRN(:), JCN(:)
+	real(8), allocatable :: NONZEROS(:)
 	
 	save
 	
 contains
-	subroutine read_input(unitnum, filename, mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, materialprops, &
-						  gravity, isbinary, penalty)
+	subroutine read_input(unitnum, filename, mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
+		materialtype, materialprops, gravity, isbinary, penalty)
 		
 		! ********************************************************************************
 		! Read in the user-specified input parameters
@@ -42,9 +46,9 @@ contains
 		character(100) :: text
 		character(1) :: flag = ':'
 		integer :: i, j, k, l, ios
-		real(8) :: temp(19)
+		real(8) :: temp(20)
 	
-		integer, intent(out) :: mode, maxit, nsteps, nprint, isbinary
+		integer, intent(out) :: mode, maxit, nsteps, nprint, isbinary, materialtype
 		real(8), intent(out) :: firststep, adjust, tol, dt, damp, materialprops(5), gravity(3), penalty
 	
 		open(unit = unitnum, file = filename)
@@ -65,28 +69,32 @@ contains
 			end if	
 		end do
 	
-		mode=int(temp(1))
-		tol=temp(2)
-		maxit=int(temp(3))
-		firststep=temp(4)
-		adjust=temp(5)
-		nsteps=int(temp(6))
-		dt=temp(7)
-		nprint=int(temp(8))
-		damp=temp(9)
-		materialprops(:)=temp(10:14)
-		gravity(:)=temp(15:17)
-	    isbinary = temp(18)
-		penalty = temp(19)
+		mode = int(temp(1))
+		isbinary = int(temp(2))
+		tol = temp(3)
+		penalty = temp(4)
+		maxit = int(temp(5))
+		gravity(:) = temp(6:8)
 		
+		firststep = temp(9)
+		adjust = temp(10)
+		
+		nsteps = int(temp(11))
+		dt = temp(12)
+		nprint = int(temp(13))
+		damp = temp(14)
+		
+		materialtype = int(temp(15))
+		materialprops(:) = temp(16:20)
+	
 		close(10)
 	end subroutine read_input
 	
-	subroutine read_mesh(nsd, ned, nn, nel, nen, coords, connect, bc1, bc2, share)
+	subroutine read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
+		load_size, load_type, load_num, load_val, share)
 		
 		! ************************************************************************************************************************
 		! nsd: number of dimensions
-		! ned: number of nodal degree of freedom. ned = nsd currently.
 		! nn: number of nodes
 		! nel: number of elements
 		! nen: number of nodes in one element
@@ -98,11 +106,11 @@ contains
 		! ************************************************************************************************************************
 		implicit none
 		
-		integer, intent(out) :: nsd, ned, nen, nn, nel
-		integer, allocatable, intent(out) :: connect(:,:)
-		real(8), allocatable, intent(out) :: coords(:,:), bc2(:,:), bc1(:,:)
+		integer, intent(out) :: nsd, nen, nn, nel, bc_size, load_size, load_type
+		integer, allocatable, intent(out) :: connect(:, :), bc_num(:, :), load_num(:, :)
+		real(8), allocatable, intent(out) :: coords(:,:), bc_val(:), load_val(:, :)
 		integer, allocatable :: share(:)
-		integer :: no_bc1, no_bc2, i, j, temp
+		integer :: i, j, temp
 	
 		open(10, file = 'coords.txt')
 		read(10, *) nsd, nn
@@ -120,33 +128,24 @@ contains
 		end do
 		close(10)
 	
-		open(10, file='bc.txt')
-		read(10, *) no_bc1
-		if (no_bc1 /= 0) then
-			allocate(bc1(3, no_bc1))
-			do i=1, no_bc1
-				read(10, *) bc1(:, i)
-			end do
-		else
-			allocate(bc1(3, 1)) ! no boundary condition
-			bc1 = -1.0
-		end if	
+		open(10, file = 'bc.txt')
+		read(10, *) bc_size
+		allocate(bc_num(2, bc_size))
+		allocate(bc_val(bc_size))
+		do i = 1, bc_size
+			read(10, *) bc_num(:, i), bc_val(i)
+		end do
 		close(10)
 	
 		open(10, file = 'load.txt')
-		read(10, *) no_bc2, temp
-		if (no_bc2 /= 0) then
-			allocate(bc2(temp, no_bc2)) ! temp = 3 -> pressure load; temp = 4 or 5 -> traction load
-			do i=1, no_bc2
-				read(10, *) bc2(:, i)
-			end do
-		else
-			allocate(bc2(2+nsd, 1)) ! no load
-			bc2 = -1.0
-		end if
+		read(10, *) load_size, load_type
+		load_type = load_type - 2
+		allocate(load_num(2, load_size))
+		allocate(load_val(load_type, load_size))
+		do i = 1, load_size
+			read(10, *) load_num(:, i), load_val(:, i)
+		end do
 		close(10)
-		
-		ned = nsd ! in the current program, ned is always equval to nsd
 		
 		allocate(share(nn))
 		share = 0
@@ -159,6 +158,68 @@ contains
 	    close(10)
 	
 	end subroutine read_mesh
+	
+	subroutine analyze_pattern(nsd, nn, nel, nen, NE, IRN, JCN, NONZEROS)
+		implicit none
+		integer, intent(in) :: nsd, nn, nel, nen
+		integer, intent(inout) :: NE
+		integer, allocatable, intent(inout) :: IRN(:), JCN(:)
+		real(8), allocatable, intent(inout) :: NONZEROS(:)
+		integer :: i, j, a, b, row, col, ele
+		
+		NE = 0
+		
+		do ele = 1, nel
+			do a = 1, nen
+				do i = 1, nsd
+					row = nsd*(connect(a, ele) - 1) + i
+					do b = 1, nen
+						do j = 1, nsd
+							col = nsd*(connect(b, ele) - 1) + j
+							NE = NE + 1
+						end do
+					end do
+					col = nsd*nn + ele
+					NE = NE + 1
+				end do
+			end do
+			row = nsd*nn + ele
+			col = nsd*nn + ele
+			NE = NE + 1
+		end do
+		
+		allocate(IRN(NE))
+		allocate(JCN(NE))
+		allocate(NONZEROS(NE))
+		
+		NE = 0
+		do ele = 1, nel
+			do a = 1, nen
+				do i = 1, nsd
+					row = nsd*(connect(a, ele) - 1) + i
+					do b = 1, nen
+						do j = 1, nsd
+							col = nsd*(connect(b, ele) - 1) + j
+							NE = NE + 1
+							IRN(NE) = row
+							JCN(NE) = col
+						end do
+					end do
+					col = nsd*nn + ele
+					NE = NE + 1
+					IRN(NE) = row
+					JCN(NE) = col
+				end do
+			end do
+			row = nsd*nn + ele
+			col = nsd*nn + ele
+			NE = NE + 1
+			IRN(NE) = row
+			JCN(NE) = col
+		end do
+							
+		write(*,'(e12.4)') NE*1.0/((nsd*nn + nel)**2)
+	end subroutine analyze_pattern
 	
 end module read_file
 	

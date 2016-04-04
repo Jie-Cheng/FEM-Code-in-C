@@ -1,12 +1,12 @@
-module mixed_output
+module output
 	implicit none
 	
 contains
 	subroutine write_results(filepath,dofs)
-		use read_file, only: mode, step, nn, ned, nel, isbinary
+		use read_file, only: mode, step, nn, nsd, nel, isbinary
 		implicit none
 		character(80) :: filepath
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		if (step == 0) then
 			call write_case(filepath)
 		end if
@@ -16,7 +16,7 @@ contains
 		
 	end subroutine write_results
 	subroutine write_case(filepath)
-		use read_file, only: nsteps, nprint, dt, ned, nn
+		use read_file, only: nsteps, nprint, dt, nsd, nn
 		implicit none
 		
 		character(80) :: filepath, filename
@@ -46,9 +46,9 @@ contains
 	end subroutine write_case
 	
 	subroutine write_geometry(filepath,dofs)
-		use read_file, only: step, nn, nsd,ned, nen, nel, connect, coords, nprint, isbinary
+		use read_file, only: step, nn, nsd, nen, nel, connect, coords, nprint, isbinary
 		implicit none
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		character(80) :: filepath, filename, buffer
 		integer :: i,j
 		integer, dimension(nn) :: nodeid
@@ -62,7 +62,7 @@ contains
 		
 		do i=1,nsd
 			do j=1,nn
-				coords1(i,j) = coords(i,j) + dofs((j-1)*ned+i)
+				coords1(i,j) = coords(i,j) + dofs((j-1)*nsd+i)
 			end do
 		end do
 		if (nsd==2) then
@@ -165,10 +165,10 @@ contains
 	
 	
 	subroutine write_displacement(filepath,dofs)
-		use read_file, only: step, nsd, ned, nn, coords, nel, nen, connect, nprint, isbinary
+		use read_file, only: step, nsd, nsd, nn, coords, nel, nen, connect, nprint, isbinary
 		implicit none
 		
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		character(80) :: filepath, filename, buffer
 		integer :: i,j,row
 		character(6) :: temp
@@ -220,20 +220,20 @@ contains
 		
 	
 	subroutine write_stress(filepath,dofs)
-		use read_file, only: step, nsd, ned, nn, coords, nel, nen, connect, materialprops, share, nprint, isbinary
+		use read_file, only: step, nsd, nn, coords, nel, nen, connect, materialtype, materialprops, share, nprint, isbinary
 		use shapefunction
 		use integration
-		use mixed_material
+		use material
 		
 		implicit none
 		
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		character(80) :: filepath, filename, buffer
 		character(6) :: temp
 		real(8), dimension(nsd,nen) :: elecoord
-		real(8), dimension(ned,nen) :: eledof
+		real(8), dimension(nsd,nen) :: eledof
 		real(8), dimension(nen,nsd) :: dNdx, dNdy
-		real(8), dimension(ned,nsd) :: stress
+		real(8), dimension(nsd,nsd) :: stress
 		real(8), dimension(nen,nsd) :: dNdxi 
 		real(8), dimension(nsd,nsd) :: dxdxi, dxidx, F, B, eye
 		real(8), allocatable, dimension(:,:) :: xilist
@@ -277,12 +277,12 @@ contains
 			! extract coords of nodes, and dofs for the element
 			do a=1,nen
 				elecoord(:,a) = coords(:,connect(a,ele))
-				do i=1,ned
-					eledof(i,a) = dofs(ned*(connect(a,ele)-1)+i)
+				do i=1,nsd
+					eledof(i,a) = dofs(nsd*(connect(a,ele)-1)+i)
 				end do
 			end do
 			! extract pressure
-			pressure = dofs(nn*ned+ele)
+			pressure = dofs(nn*nsd+ele)
 			! fully integration
 			! set up integration points and weights
 			npt = int_number(nsd,nen,0)
@@ -318,7 +318,7 @@ contains
 				end if
 				vcr(ele) = vcr(ele) + Ja
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd,ned,intcoord,F,pressure,materialprops)
+				stress = Kirchhoffstress(nsd,intcoord,F,pressure,materialtype,materialprops)
 				! Cauchy stress
 				stress = stress/Ja
 				! vectorize
@@ -382,4 +382,4 @@ contains
 		end if
 		deallocate(xilist)
 	end subroutine write_stress
-end module mixed_output	
+end module output	

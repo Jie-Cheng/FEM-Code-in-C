@@ -1,19 +1,19 @@
-module mixed_internalforce	
+module internalforce	
 	implicit none
 contains
-	function force_internal(dofs)
-		use read_file, only: nsd, ned, nn, coords, nel, nen, connect, materialprops
+	subroutine force_internal(dofs, Fint)
+		use read_file, only: nsd, nn, coords, nel, nen, connect, materialtype, materialprops
 		use shapefunction
 		use integration
-		use mixed_material
+		use material
 		implicit none
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
-		real(8), dimension(nn*ned+nel) :: force_internal
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(inout) :: Fint
 		real(8), dimension(nsd,nen) :: elecoord
-		real(8), dimension(ned,nen) :: eledof
+		real(8), dimension(nsd,nen) :: eledof
 		real(8), dimension(nen,nsd) :: dNdx, dNdy
-		real(8), dimension(ned,nsd) :: stress
-		real(8), dimension(nen*ned+1) :: fele
+		real(8), dimension(nsd,nsd) :: stress
+		real(8), dimension(nen*nsd+1) :: fele
 		real(8), dimension(nsd) :: xi, intcoord ! intcoord is the coordinates of the integration points, necessary for anisotropic models
 		real(8), dimension(nen,nsd) :: dNdxi 
 		real(8), dimension(nsd,nsd) :: dxdxi, dxidx, F, Finv, B, eye
@@ -40,33 +40,30 @@ contains
 			end do
 		end do
 		
-		! initialize force_internal
-		force_internal = 0.
+		! initialize Fint
+		Fint = 0.
 		
 		! allocate
 		npt = int_number(nsd,nen,0)
 		allocate(xilist(nsd,npt))
 		allocate(weights(npt))
+		xilist = int_points(nsd,nen,npt)
+		weights = int_weights(nsd,nen,npt)
 		
 		! loop over elements
 		do ele=1,nel
 			! extract coords of nodes, and dofs for the element
 			do a=1,nen
 				elecoord(:,a) = coords(:,connect(a,ele))
-				do i=1,ned
-					eledof(i,a) = dofs(ned*(connect(a,ele)-1)+i)
+				do i=1,nsd
+					eledof(i,a) = dofs(nsd*(connect(a,ele)-1)+i)
 				end do
 			end do
 			! extract the element pressure
-			pressure = dofs(ned*nn+ele)
+			pressure = dofs(nsd*nn+ele)
 			! compute the internal force
 			! initialize
 			fele = 0.
-			! fully integration
-			! set up integration points and weights
-			npt = int_number(nsd,nen,0)
-			xilist = int_points(nsd,nen,npt)
-			weights = int_weights(nsd,nen,npt)
 			! loop over integration points
 			do intpt=1,npt
 				xi = xilist(:,intpt)
@@ -89,8 +86,6 @@ contains
 				dNdx = matmul(dNdxi,dxidx)
 				! deformation gradient, F_ij = delta_ij + dU_i/dx_j
 				F = eye + matmul(eledof,dNdx)
-				! left Cauchy-Green tensor, B = FF^T and Ja = det(F)
-				B = matmul(F,transpose(F))
 				if (nsd == 2) then
 					Ja = F(1,1)*F(2,2) - F(1,2)*F(2,1)
 				else if (nsd == 3) then
@@ -105,32 +100,32 @@ contains
 				call DGETRI(n1,Finv,n1,ipiv,work,n1,info)	
 				dNdy = matmul(dNdx,Finv)
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd,ned,intcoord,F,pressure,materialprops)
+				stress = Kirchhoffstress(nsd,intcoord,F,pressure,materialtype,materialprops)
 				! compute the element internal force
 				do a=1,nen
 					do i=1,nsd
-						row=(a-1)*ned+i
+						row=(a-1)*nsd+i
 						do j=1,nsd
 							fele(row) = fele(row) + stress(i,j)*dNdy(a,j)*weights(intpt)*det
 						end do
 					end do
 				end do
-				fele(nen*ned+1) = fele(nen*ned+1) + ((Ja-1)-pressure/materialprops(4))*weights(intpt)*det
+				fele(nen*nsd+1) = fele(nen*nsd+1) + ((Ja-1)-pressure/materialprops(2))*weights(intpt)*det
 			end do
 			! scatter the element internal force into the global internal force
 			do a=1,nen
-				do i=1,ned
-					row = ned*(connect(a,ele)-1) + i;
-					force_internal(row) = force_internal(row) + fele(ned*(a-1)+i);
+				do i=1,nsd
+					row = nsd*(connect(a,ele)-1) + i;
+					Fint(row) = Fint(row) + fele(nsd*(a-1)+i);
 				end do
 			end do
 			! scatter the element pressure
-			row = nn*ned + ele
-			force_internal(row) = force_internal(row) + fele(ned*nen+1)
+			row = nn*nsd + ele
+			Fint(row) = Fint(row) + fele(nsd*nen+1)
 		end do
 		
 		deallocate(xilist)
 		deallocate(weights)
 		
-	end function force_internal	
-end module mixed_internalforce
+	end subroutine force_internal
+end module internalforce

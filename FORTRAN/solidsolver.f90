@@ -14,11 +14,13 @@ program solidsolver
 	integer :: ct, ct_rate, ct_max, ct1
 	real(8) :: time_elapsed  
 	call timestamp()
-	filepath = '/Users/jiecheng/Documents/SolidResults/'
+	filepath = '/Users/Jie/Documents/SolidResults/'
 	call system_clock(ct,ct_rate,ct_max)
 	call read_input(10, 'input.txt', mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
-					materialprops, gravity, isbinary, penalty)
-	call read_mesh(nsd, ned, nn, nel, nen, coords, connect, bc1, bc2, share)
+		materialtype, materialprops, gravity, isbinary, penalty)
+	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
+		load_size, load_type, load_num, load_val, share)
+	!call analyze_pattern(nsd, nn, nel, nen, NE, IRN, JCN, NONZEROS);
 	if (mode == 0) then 
 		call statics(filepath)
 	else if (mode == 1) then
@@ -45,12 +47,12 @@ subroutine statics(filepath)
 	use integration
 	use face
 	use shapefunction
-	use mixed_material
-	use mixed_externalforce
+	use material
+	use externalforce
 	use symmetric_solver
-	use mixed_output
-	use mixed_internalforce
-	use mixed_tangentstiffness
+	use output
+	use internalforce
+	use tangentstiffness
 	
 	implicit none
 	
@@ -58,33 +60,33 @@ subroutine statics(filepath)
 	real(8), allocatable, dimension(:) :: Fext, Fint, R, w, w1, dw
 	real(8), allocatable, dimension(:,:) ::  A
 	real(8) :: loadfactor, increment, err1, err2
-	real(8), dimension(size(bc1, 2)) :: constraint
-	real(8), dimension(size(bc1, 2), nn*ned) :: der_constraint
+	real(8), dimension(bc_size) :: constraint
+	real(8), dimension(bc_size, nn*nsd) :: der_constraint
 	character(80), intent(in) :: filepath
 	
-	allocate(Fext(nn*ned+nel))
-	allocate(Fint(nn*ned+nel))
-	allocate(R(nn*ned+nel))
-	allocate(w(nn*ned+nel))
-	allocate(w1(nn*ned+nel))
-	allocate(dw(nn*ned+nel))
-	allocate(A(nn*ned+nel,nn*ned+nel))
+	allocate(Fext(nn*nsd+nel))
+	allocate(Fint(nn*nsd+nel))
+	allocate(R(nn*nsd+nel))
+	allocate(w(nn*nsd+nel))
+	allocate(w1(nn*nsd+nel))
+	allocate(dw(nn*nsd+nel))
+	allocate(A(nn*nsd+nel,nn*nsd+nel))
 	
 	! initialize w
 	w = 0.
 	constraint = 0.
 	der_constraint = 0.
 	
-	nprint=1
-	nsteps=1
-	dt=1.
+	nprint = 1
+	nsteps = 1
+	dt = 1.
 	loadfactor = 0.
 	increment = firststep
 	step = 0
 	call write_results(filepath,w)
 	
 	! If the external load is traction, then the external force doesn't change
-	if (size(bc2, 1) /= 3) then
+	if (load_type /= 1) then
 		call force_traction(Fext)
 	end if
 	
@@ -101,32 +103,28 @@ subroutine statics(filepath)
 		write(*,'(A, A, i5, 5x, A, e12.4, A)') repeat('=', 30), 'Step', step, 'Load', loadfactor, repeat('=', 36)
 		do while (((err1 > tol) .or. (err2 > tol)) .and. (nit < maxit))
 			nit = nit + 1
-			Fint = force_internal(w)
+			call force_internal(w, Fint)
 			! If the external load is pressure, update the external force
-			if (size(bc2, 1) == 3) then
-				Fext = force_pressure(w)
+			if (load_type == 1) then
+				call force_pressure(w, Fext)
 			end if
-			A = tangent_internal(w)
+			call tangent_internal(w, A)
 			R = Fint - loadfactor*Fext
 			! penalty
-			do i = 1, size(bc1,2)
-				row = ned*(int(bc1(1,i))-1) + int(bc1(2,i))
-				constraint(i) = w(row) - bc1(3,i)
-				der_constraint(i,row) = 1. 
-			end do
-			do i = 1, size(bc1,2)
-				row = ned*(int(bc1(1,i))-1) + int(bc1(2,i))
-				A(row,row) = A(row,row) + penalty*der_constraint(i,row)*der_constraint(i,row)
-				R(row) = R(row) + penalty*der_constraint(i,row)*constraint(i)
+			do i = 1, bc_size
+				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
+				constraint(i) = w(row) - bc_val(i)
+				der_constraint(i,row) = 1.
+				A(row,row) = A(row,row) + penalty*der_constraint(i, row)*der_constraint(i, row)
+				R(row) = R(row) + penalty*der_constraint(i, row)*constraint(i)
 			end do
 			! Solve
-			!call ma41ds(nn*ned+nel,A,-R,dw)
-			call ma57ds(nn*ned+nel,A,-R,dw)
+			call ma57ds(nn*nsd + nel, A, -R, dw)
 			w = w + dw
 			! check convergence
-			err1 = sqrt(dot_product(dw,dw)/dot_product(w,w))
-			err2 = sqrt(dot_product(R,R))/(ned*nn+nel)
-			write(*,'("Iteration number:",i8,5x,"Err1:",E12.4,5x,"Err2:",E12.4,5x,"Tolerance:",E12.4)') nit,err1,err2,tol
+			err1 = sqrt(dot_product(dw, dw)/dot_product(w, w))
+			err2 = sqrt(dot_product(R, R))/(nsd*nn + nel)
+			write(*,'("Iteration number:",i8,5x,"Err1:",E12.4,5x,"Err2:",E12.4,5x,"Tolerance:",E12.4)') nit, err1, err2, tol
 		end do
 		
 		if (nit == maxit) then
@@ -134,9 +132,9 @@ subroutine statics(filepath)
 			loadfactor = loadfactor - increment
 			increment = increment / 2
 		else if (nit > 6) then
-			increment = increment*(1-adjust)
+			increment = increment*(1 - adjust)
 		else if (nit < 6) then
-			increment = increment*(1+adjust)
+			increment = increment*(1 + adjust)
 		end if
 	end do
 	step = nprint
@@ -159,12 +157,12 @@ subroutine dynamics(filepath)
 	use integration
 	use face
 	use shapefunction
-	use mixed_material
-	use mixed_externalforce
+	use material
+	use externalforce
 	use symmetric_solver
-	use mixed_output
-	use mixed_internalforce
-	use mixed_tangentstiffness
+	use output
+	use internalforce
+	use tangentstiffness
 	use mass
 	
 	implicit none
@@ -173,24 +171,24 @@ subroutine dynamics(filepath)
 	real(8), allocatable, dimension(:) :: Fext, Fint, F, R, un, un1, vn, vn1, an, an1, w, dw
 	real(8), allocatable, dimension(:,:) ::  A, M
 	real(8) :: loadfactor, increment, err1, err2, gamma, beta
-	real(8), dimension(size(bc1, 2)) :: constraint
-	real(8), dimension(size(bc1, 2), nn*ned) :: der_constraint
+	real(8), dimension(bc_size) :: constraint
+	real(8), dimension(bc_size, nn*nsd) :: der_constraint
 	character(80), intent(in) :: filepath
 	
-	allocate(Fext(nn*ned+nel))
-	allocate(Fint(nn*ned+nel))
-	allocate(F(nn*ned+nel))
-	allocate(R(nn*ned+nel))
-	allocate(w(nn*ned+nel))
-	allocate(dw(nn*ned+nel))
-	allocate(un(nn*ned+nel))
-	allocate(un1(nn*ned+nel))
-	allocate(vn(nn*ned+nel))
-	allocate(vn1(nn*ned+nel))
-	allocate(an(nn*ned+nel))
-	allocate(an1(nn*ned+nel))
-	allocate(A(nn*ned+nel,nn*ned+nel))
-	allocate(M(nn*ned+nel,nn*ned+nel))
+	allocate(Fext(nn*nsd+nel))
+	allocate(Fint(nn*nsd+nel))
+	allocate(F(nn*nsd+nel))
+	allocate(R(nn*nsd+nel))
+	allocate(w(nn*nsd+nel))
+	allocate(dw(nn*nsd+nel))
+	allocate(un(nn*nsd+nel))
+	allocate(un1(nn*nsd+nel))
+	allocate(vn(nn*nsd+nel))
+	allocate(vn1(nn*nsd+nel))
+	allocate(an(nn*nsd+nel))
+	allocate(an1(nn*nsd+nel))
+	allocate(A(nn*nsd+nel,nn*nsd+nel))
+	allocate(M(nn*nsd+nel,nn*nsd+nel))
 	
 	! initialization
 	w = 0.
@@ -210,25 +208,26 @@ subroutine dynamics(filepath)
 	loadfactor = 0.
 	increment = firststep
 	step = 0
+	
 	call write_results(filepath,w)
 	call mass_matrix(M)
 	
 	! If the external load is traction, then the external force doesn't change
-	if (size(bc2, 1) /= 3) then
+	if (load_type /= 1) then
 		call force_traction(Fext)
 	end if
 	
 	F = Fext
-	do i = 1, size(bc1,2)
-		row = ned*(int(bc1(1,i))-1) + int(bc1(2,i))
-		do col = 1, nn*ned
+	do i = 1, bc_size
+		row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
+		do col = 1, nn*nsd
 			M(row, col) = 0.
 			M(col, row) = 0.
 		end do
 		M(row, row) = 1.
 		F(row) = 0.
 	end do
-	call ma57ds(nn*ned+nel,M,F,an)
+	call ma57ds(nn*nsd+nel,M,F,an)
 	
 	do step = 1, nsteps
 		w = un
@@ -240,36 +239,32 @@ subroutine dynamics(filepath)
 			nit = nit + 1
 			an1 = (w - (un + dt*vn + 0.5*dt**2*(1 - 2*beta)*an))/(beta*dt**2)
 			vn1 = vn + (1 - gamma)*dt*an + gamma*dt*an1
-			Fint = force_internal(w)
+			call force_internal(w, Fint)
 			! If the external load is pressure, update the external force
-			if (size(bc2, 1) == 3) then
-				Fext = force_pressure(w)
+			if (load_type == 1) then
+				call force_pressure(w, Fext)
 			end if
 			F = Fext - Fint - damp*vn1
-			A = tangent_internal(w)
+			call tangent_internal(w, A)
 			R = matmul(M, an1) - F
 			! penalty
-			do i = 1, size(bc1,2)
-				row = ned*(int(bc1(1,i))-1) + int(bc1(2,i))
-				constraint(i) = w(row) - bc1(3,i)
-				der_constraint(i,row) = 1. 
-			end do
-			do i = 1, size(bc1,2)
-				row = ned*(int(bc1(1,i))-1) + int(bc1(2,i))
-				A(row,row) = A(row,row) + penalty*der_constraint(i,row)*der_constraint(i,row)
-				R(row) = R(row) + penalty*der_constraint(i,row)*constraint(i)
+			do i = 1, bc_size
+				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
+				constraint(i) = w(row) - bc_val(i)
+				der_constraint(i,row) = 1.
+				A(row,row) = A(row,row) + penalty*der_constraint(i, row)*der_constraint(i, row)
+				R(row) = R(row) + penalty*der_constraint(i, row)*constraint(i)
 			end do
 			A = M/beta*dt**2 + A
-			do i = 1, nn*ned
+			do i = 1, nn*nsd
 				A(i,i) = A(i,i) + damp*gamma*dt
 			end do
 			! Solve
-			!call ma41ds(nn*ned+nel,A,-R,dw)
-			call ma57ds(nn*ned+nel,A,-R,dw)
+			call ma57ds(nn*nsd+nel, A, -R, dw)
 			w = w + dw
 			! check convergence
 			err1 = sqrt(dot_product(dw,dw)/dot_product(w,w))
-			err2 = sqrt(dot_product(R,R))/(ned*nn+nel)
+			err2 = sqrt(dot_product(R,R))/(nsd*nn+nel)
 		end do
 		write(*,'("Iteration number:",i8,5x,"Err1:",E12.4,5x,"Err2:",E12.4,5x,"Tolerance:",E12.4)') nit,err1,err2,tol
 		vn = vn1

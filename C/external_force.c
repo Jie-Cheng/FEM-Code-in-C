@@ -62,7 +62,7 @@ void ExternalPressure(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel]
 			for (i = 0; i < nfacenodes; ++i) {
 				for (j = 0; j < nsd; ++j){
 					row = nsd*i + j;
-					fele[row] += traction[j]*N[i]*weights[intpt];
+					fele[row] += external_pressure*traction[j]*N[i]*weights[intpt];
 				}
 			}
 		}

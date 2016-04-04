@@ -1,4 +1,4 @@
-module mixed_tangentstiffness
+module tangentstiffness
 	implicit none
 contains
 	function cross(a, b)
@@ -10,20 +10,20 @@ contains
 		cross(3) = a(1)*b(2) - a(2)*b(1)
 	end function cross
 	
-	function tangent_internal(dofs)
-		use read_file, only: nsd, ned, nn, coords, nel, nen, connect, materialprops
+	subroutine tangent_internal(dofs, Kglo)
+		use read_file, only: nsd, nn, coords, nel, nen, connect, materialtype, materialprops
 		use shapefunction
 		use integration
-		use mixed_material
+		use material
 		implicit none
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
-		real(8), dimension(nn*ned+nel,nn*ned+nel) :: tangent_internal
-		real(8), dimension(ned,nsd,ned,nsd) :: C
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel,nn*nsd+nel), intent(inout) :: Kglo
+		real(8), dimension(nsd,nsd,nsd,nsd) :: C
 		real(8), dimension(nsd,nen) :: elecoord
-		real(8), dimension(ned,nen) :: eledof
+		real(8), dimension(nsd,nen) :: eledof
 		real(8), dimension(nen,nsd) :: dNdx, dNdy
-		real(8), dimension(ned,nsd) :: stress
-		real(8), dimension(nen*ned+1,nen*ned+1) :: kint
+		real(8), dimension(nsd,nsd) :: stress
+		real(8), dimension(nen*nsd+1,nen*nsd+1) :: kint
 		real(8), dimension(nsd) :: xi, intcoord ! intcoord is the coordinates of the integration points, necessary for anisotropic models
 		real(8), dimension(nen,nsd) :: dNdxi 
 		real(8), dimension(nsd,nsd) :: dxdxi, dxidx, F, Finv, B, eye
@@ -49,39 +49,37 @@ contains
 				end if
 			end do
 		end do
+		
 		! initialize 
-		tangent_internal = 0.
+		Kglo = 0.
 				
 		! allocate
 		npt = int_number(nsd,nen,0)
 		allocate(xilist(nsd,npt))
 		allocate(weights(npt))
+		xilist = int_points(nsd,nen,npt)
+		weights = int_weights(nsd,nen,npt)
 		
 		! loop over elements
 		do ele=1,nel
 			! extract coords of nodes, and dofs for the element
 			do a=1,nen
 				elecoord(:,a) = coords(:,connect(a,ele))
-				do i=1,ned
-					eledof(i,a) = dofs(ned*(connect(a,ele)-1)+i)
+				do i=1,nsd
+					eledof(i,a) = dofs(nsd*(connect(a,ele)-1)+i)
 				end do
 			end do
 			! extract the pressure
-			pressure = dofs(ned*nn+ele)
+			pressure = dofs(nsd*nn+ele)
 			! initialize
 			kint = 0.
-			! fully integration
-			! set up integration points and weights
-			npt = int_number(nsd,nen,0)
-			xilist = int_points(nsd,nen,npt)
-			weights = int_weights(nsd,nen,npt)
 			! loop over integration points
-			do intpt=1,npt
-				xi = xilist(:,intpt)
-				intcoord = matmul(elecoord,sf(nen,nsd,xi))
+			do intpt=1, npt
+				xi = xilist(:, intpt)
+				intcoord = matmul(elecoord, sf(nen,nsd,xi))
 				dNdxi = sfder(nen,nsd,xi)
 				! set up the jacobian matrix
-				dxdxi = matmul(elecoord,dNdxi)
+				dxdxi = matmul(elecoord, dNdxi)
 				! inverse matrix and determinant
 				dxidx = dxdxi
 				call DGETRF(n1,n1,dxidx,n1,ipiv,info)
@@ -94,11 +92,9 @@ contains
 						  + dxdxi(1,3)*dxdxi(2,1)*dxdxi(3,2) - dxdxi(1,3)*dxdxi(2,2)*dxdxi(3,1)
 				end if
 				! compute dNdx
-				dNdx = matmul(dNdxi,dxidx)
+				dNdx = matmul(dNdxi, dxidx)
 				! deformation gradient, F_ij = delta_ij + dU_i/dx_j
-				F = eye + matmul(eledof,dNdx)
-				! left Cauchy-Green tensor, B = FF^T and Ja = det(F)
-				B = matmul(F,transpose(F))
+				F = eye + matmul(eledof ,dNdx)
 				if (nsd == 2) then
 					Ja = F(1,1)*F(2,2) - F(1,2)*F(2,1)
 				else if (nsd == 3) then
@@ -111,20 +107,20 @@ contains
 				Finv = F
 				call DGETRF(n1,n1,Finv,n1,ipiv,info)
 				call DGETRI(n1,Finv,n1,ipiv,work,n1,info)
-				dNdy = matmul(dNdx,Finv)
+				dNdy = matmul(dNdx, Finv)
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd,ned,intcoord,F,pressure,materialprops)
+				stress = Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops)
 				! compute the material stiffness C_ijkl
-				C = materialstiffness(nsd,ned,intcoord,F,pressure,materialprops)
+				C = materialstiffness(nsd, intcoord, F, pressure, materialtype, materialprops)
 				! compute the element internal force
-				do a=1,nen
-					do i=1,ned
-						do d=1,nen
-							do k=1,ned
-								row = (a-1)*ned + i
-								col = (d-1)*ned + k
-								do j=1,nsd
-									do l=1,nsd
+				do a = 1, nen
+					do i = 1, nsd
+						do d = 1, nen
+							do k = 1, nsd
+								row = (a-1)*nsd + i
+								col = (d-1)*nsd + k
+								do j = 1,nsd
+									do l = 1,nsd
 										kint(row,col) = kint(row,col) + &
 											            (eye(i,k)*stress(j,l)+C(i,j,k,l))*dNdy(a,j)*dNdy(d,l)*weights(intpt)*det;			
 									end do
@@ -132,48 +128,48 @@ contains
 							end do
 						end do
 						! displacement + pressure term
-						row = (a-1)*ned + i
-						col = ned*nen + 1
+						row = (a-1)*nsd + i
+						col = nsd*nen + 1
 						kint(row,col) = kint(row,col) + dNdy(a,i)*Ja*weights(intpt)*det
 						kint(col,row) = kint(row,col)
 					end do
 				end do
 				! pressure + pressure term
-				kint(ned*nen+1,ned*nen+1) = kint(ned*nen+1,ned*nen+1) - 1/materialprops(4)*weights(intpt)*det
+				kint(nsd*nen+1, nsd*nen+1) = kint(nsd*nen+1, nsd*nen+1) - 1/materialprops(2)*weights(intpt)*det
 			end do
-			! scatter the element kint into the global Kint
-			do a=1,nen
-				do i=1,ned
-					do d=1,nen
-						do k=1,ned
-							row = ned*(connect(a,ele)-1) + i
-							col = ned*(connect(d,ele)-1) + k
-		                    tangent_internal(row,col) = tangent_internal(row,col) + kint(ned*(a-1)+i,ned*(d-1)+k)
+			! scatter the element kint into the global Kglo
+			do a = 1, nen
+				do i = 1, nsd
+					do d = 1, nen
+						do k = 1, nsd
+							row = nsd*(connect(a, ele) - 1) + i
+							col = nsd*(connect(d, ele) - 1) + k
+		                    Kglo(row, col) = Kglo(row, col) + kint(nsd*(a-1)+i,nsd*(d-1)+k)
 						end do
 					end do
-					row = ned*(connect(a,ele)-1) + i
-					col = ned*nn + ele
-					tangent_internal(row,col) = tangent_internal(row,col) + kint(ned*(a-1)+i,ned*nen+1)
-					tangent_internal(col,row) = tangent_internal(row,col)
+					row = nsd*(connect(a, ele)-1) + i
+					col = nsd*nn + ele
+					Kglo(row, col) = Kglo(row, col) + kint(nsd*(a-1)+i,nsd*nen+1)
+					Kglo(col, row) = Kglo(row, col)
 				end do
 			end do
-			tangent_internal(ned*nn+ele,ned*nn+ele) = tangent_internal(ned*nn+ele,ned*nn+ele) + kint(ned*nen+1,ned*nen+1)
+			Kglo(nsd*nn+ele,nsd*nn+ele) = Kglo(nsd*nn+ele,nsd*nn+ele) + kint(nsd*nen+1,nsd*nen+1)
 		end do
 		
 		deallocate(xilist)
 		deallocate(weights)
-	end function tangent_internal
+	end subroutine tangent_internal
 	
 	function tangent_external(dofs)
-		use read_file, only: nsd,ned,nn,nel,nen,coords,connect,bc2
+		use read_file, only: nsd,nn,nel,nen,coords,connect, load_size, load_num, load_val
 		use shapefunction
 		use integration
 		use face
 		implicit none
 		! input argument
-		real(8), dimension(nn*ned+nel), intent(in) :: dofs
+		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		! output
-		real(8), dimension(nn*ned+nel,nn*ned+nel) :: tangent_external
+		real(8), dimension(nn*nsd+nel,nn*nsd+nel) :: tangent_external
 		! Local variables
 		real(8), allocatable, dimension(:,:) :: kext ! Element stiffness 
 		! nodelist
@@ -212,17 +208,17 @@ contains
 		allocate(N(nfacenodes))
 		allocate(kext(nfacenodes*nsd,nfacenodes*nsd))
 		
-		do l = 1, size(bc2,2)
-			ele = int(bc2(1,l))
-			faceid = int(bc2(2,l))
+		do l = 1, load_size
+			ele = load_num(1, l)
+			faceid = load_num(2, l)
 			nodelist(:) = face_nodes(nsd,nen,nfacenodes,faceid)
 			do a = 1, nfacenodes
 				face_coord(:,a) = coords(:,connect(nodelist(a),ele))
 				do i = 1, nsd
-					face_dof(i,a) = dofs(ned*(connect(nodelist(a),ele)-1)+i)
+					face_dof(i,a) = dofs(nsd*(connect(nodelist(a),ele)-1)+i)
 				end do 
 			end do
-			external_pressure = bc2(3,l)
+			external_pressure = load_val(1, l)
 			! element external tangent stiffness
 			kext = 0.
 			! set up integration points and weights
@@ -254,10 +250,10 @@ contains
 			! scatter
 			do a = 1, nfacenodes
 				do i = 1, nsd
-					row = (connect(nodelist(a),ele)-1)*ned + i
+					row = (connect(nodelist(a),ele)-1)*nsd + i
 					do b = 1, nfacenodes
 						do k = 1, nsd
-							col = (connect(nodelist(b),ele)-1)*ned + k
+							col = (connect(nodelist(b),ele)-1)*nsd + k
 							tangent_external(row, col) = tangent_external(row,col) + kext(nsd*(a-1)+i, nsd*(b-1)+k)
 						end do
 					end do
@@ -275,4 +271,4 @@ contains
 		deallocate(N)
 		deallocate(kext)
 	end function tangent_external
-end module mixed_tangentstiffness
+end module tangentstiffness

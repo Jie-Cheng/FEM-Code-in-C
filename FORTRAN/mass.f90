@@ -4,16 +4,16 @@ module mass
 	
 contains
 	subroutine mass_matrix(M)
-		use read_file, only:  nsd, ned, nn, coords, nel, nen, connect, materialprops
+		use read_file, only:  nsd, nn, coords, nel, nen, connect, materialprops
 		use shapefunction
 		use integration
 		
 		implicit none
 		
-		real(8), dimension(nn*ned+nel,nn*ned+nel), intent(out) :: M
-		real(8), dimension(nen*ned,nen*ned) :: mele
+		real(8), dimension(nn*nsd+nel,nn*nsd+nel), intent(out) :: M
+		real(8), dimension(nen*nsd,nen*nsd) :: mele
 		real(8), dimension(nsd,nen) :: elecoord
-		real(8), dimension(ned,nen) :: eledof
+		real(8), dimension(nsd,nen) :: eledof
 		real(8), dimension(nsd,nsd) :: dxdxi
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
@@ -23,7 +23,7 @@ contains
 		real(8), dimension(nsd) :: xi
 		real(8), dimension(nen,nsd) :: dNdxi 
 		
-		rho = materialprops(5)
+		rho = materialprops(1)
 		
 		! allocate
 		npt = int_number(nsd,nen,0)
@@ -63,9 +63,9 @@ contains
 				! compute the element mass matrix
 				do a = 1, nen
 					do b = 1, nen
-						do i = 1, ned
-							row = ned*(a-1) + i
-							col = ned*(b-1) + i
+						do i = 1, nsd
+							row = nsd*(a-1) + i
+							col = nsd*(b-1) + i
 							mele(row,col) = mele(row,col) + N(a)*N(b)*rho*det*weights(intpt)
 						end do
 					end do
@@ -73,12 +73,12 @@ contains
 			end do
 			! scatter
 			do a=1,nen
-				do i=1,ned
+				do i=1,nsd
 					do b=1,nen
-						do k=1,ned
-							row = ned*(connect(a,ele)-1)+i
-							col = ned*(connect(b,ele)-1)+k
-							M(row,col) = M(row,col) + mele(ned*(a-1)+i,ned*(b-1)+k)
+						do k=1,nsd
+							row = nsd*(connect(a,ele)-1)+i
+							col = nsd*(connect(b,ele)-1)+k
+							M(row,col) = M(row,col) + mele(nsd*(a-1)+i,nsd*(b-1)+k)
 						end do
 					end do
 				end do

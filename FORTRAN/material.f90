@@ -1,18 +1,18 @@
-module mixed_material
+module material
 	
 	implicit none
 
 contains
-	function materialstiffness(nsd,ned,intcoord,F,pressure,materialprops)
+	function materialstiffness(nsd, intcoord, F, pressure, materialtype, materialprops)
 		! Compute the material stiffness tensor
 		implicit none
 	
-		integer, intent(in) :: nsd, ned
+		integer, intent(in) :: nsd, materialtype
 		real(8), intent(in) :: pressure
 		real(8), dimension(nsd,nsd), intent(in) :: F
 		real(8), dimension(nsd), intent(in) :: intcoord
 		real(8), dimension(5), intent(in) :: materialprops
-		real(8), dimension(ned,nsd,ned,nsd):: materialstiffness
+		real(8), dimension(nsd, nsd, nsd, nsd):: materialstiffness
 	
 		integer :: i, j, k, l, p
 		real(8) :: mu1, mu2, K1, I1, I2, c1, c2, c3, Ja, I4, I6, lambda, kk1, kk2, der14, der24, der16, der26, R, beta
@@ -42,30 +42,53 @@ contains
 		B = matmul(F,transpose(F))
 		Bbar = B/Ja**(2/3.)
 		BB = matmul(Bbar,Bbar)
+		
 		! I1 I2 denote I1bar I2bar actually
-		I1 = 0.
-		do i=1,nsd
+		if (nsd == 2) then
+			I1 = 1.0
+		else if (nsd == 3) then
+			I1 = 0.0
+		end if
+		do i = 1, nsd
 			I1 = I1 + Bbar(i,i)
 		end do
 	    I2 = I1**2
-		do i=1,nsd
-			do j=1,nsd
+		do i = 1, nsd
+			do j = 1, nsd
 				I2 = I2 - Bbar(i,j)**2
 			end do 
 		end do
 		if (nsd == 2) then
-			I1 = I1 + 1.
-			I2 = I2 - 1.
+			I2 = I2/Ja**(4/3.)
 		end if
 		I2 = I2/2.
 		
-		if (dAbs(materialprops(1)-4) < 1d-4) then ! Yeoh
-			c1 = materialprops(2)
-			c2 = materialprops(3)
+		if (materialtype == 1) then ! Mooney-Rivlin
+			mu1 = materialprops(3)
+			mu2 = materialprops(4)
+			K1 = materialprops(2)
+			do i=1,nsd
+				do j=1,nsd
+					do k=1,nsd
+						do l=1,nsd
+							materialstiffness(i,j,k,l) = mu2*(2*Bbar(i,j)*Bbar(k,l)-(Bbar(i,k)*Bbar(j,l)+Bbar(i,l)*Bbar(j,k))) &
+										 - 2/3.*(mu1+2*mu2*I1)*(Bbar(k,l)*eye(i,j)+Bbar(i,j)*eye(k,l)) &
+										 + 4/3.*mu2*(BB(i,j)*eye(k,l)+BB(k,l)*eye(i,j)) &
+										 + 2/9.*(mu1*I1+4*mu2*I2)*eye(i,j)*eye(k,l) &
+										 + 1/3.*(mu1*I1+2*mu2*I2)*(eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)) &
+										 !+ (Ja*(2*Ja-1)*eye(i,j)*eye(k,l) - Ja*(Ja-1)*(eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)))*K1
+										 + (eye(i,j)*eye(k,l) - (eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)))*Ja*pressure
+						end do
+					end do
+				end do
+			end do 
+		else if (materialtype == 2) then ! Yeoh
+			c1 = materialprops(3)
+			c2 = materialprops(4)
 			c3 = materialprops(5)
-			do i = 1, ned
+			do i = 1, nsd
 				do j = 1, nsd
-					do k = 1, ned
+					do k = 1, nsd
 						do l = 1, nsd
 							materialstiffness(i,j,k,l) = (8*c2 + 24*c3*(I1 - 3))*Bbar(i,j)*Bbar(k,l) &
 													   - (4/3.*c1 + (16/3.*I1 - 8)*c2 + 12*(I1-1)*(I1-3)*c3)*(eye(i,j)*Bbar(k,l) + eye(k,l)*Bbar(i,j)) &
@@ -76,7 +99,7 @@ contains
 					end do
 				end do
 			end do
-		else if (dAbs(materialprops(1)-5) < 1d-4) then ! HGO
+		else if (materialtype == 3) then ! HGO
 			! Material parameters are hard-coded
 			beta = 50*3.14159/180
 			R = sqrt((1+(tan(beta))**2)*((intcoord(1))**2 + (intcoord(2))**2))
@@ -102,11 +125,11 @@ contains
 			! 2nd order derivative of psi w.r.t. I4/I6
 			der24 = kk1*(1+2*kk2*(I4-1.)**2)*exp(kk2*(I4-1.)**2)
 			der26 = kk1*(1+2*kk2*(I6-1.)**2)*exp(kk2*(I6-1.)**2)
-			mu1 = materialprops(2)
-			K1 = materialprops(4)
-			do i=1,ned
+			mu1 = materialprops(3)
+			K1 = materialprops(2)
+			do i=1,nsd
 				do j=1,nsd
-					do k=1,ned
+					do k=1,nsd
 						do l=1,nsd
 							materialstiffness(i,j,k,l) = - 2/3.*(mu1)*(Bbar(k,l)*eye(i,j)+Bbar(i,j)*eye(k,l)) &
 										 				 + 2/9.*(mu1*I1)*eye(i,j)*eye(k,l) &
@@ -126,40 +149,19 @@ contains
 					end do
 				end do
 			end do
-		else !neo-Hookean and Mooney-Rivlin
-			mu1 = materialprops(2)
-			mu2 = materialprops(3)
-			K1 = materialprops(4)
-			do i=1,ned
-				do j=1,nsd
-					do k=1,ned
-						do l=1,nsd
-							materialstiffness(i,j,k,l) = mu2*(2*Bbar(i,j)*Bbar(k,l)-(Bbar(i,k)*Bbar(j,l)+Bbar(i,l)*Bbar(j,k))) &
-										 - 2/3.*(mu1+2*mu2*I1)*(Bbar(k,l)*eye(i,j)+Bbar(i,j)*eye(k,l)) &
-										 + 4/3.*mu2*(BB(i,j)*eye(k,l)+BB(k,l)*eye(i,j)) &
-										 + 2/9.*(mu1*I1+4*mu2*I2)*eye(i,j)*eye(k,l) &
-										 + 1/3.*(mu1*I1+2*mu2*I2)*(eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)) &
-										 !+ (Ja*(2*Ja-1)*eye(i,j)*eye(k,l) - Ja*(Ja-1)*(eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)))*K1
-										 + (eye(i,j)*eye(k,l) - (eye(i,k)*eye(j,l)+eye(i,l)*eye(j,k)))*Ja*pressure
-						end do
-					end do
-				end do
-			end do
 		end if
-	
-		
 	end function materialstiffness
 	
-	function Kirchhoffstress(nsd,ned,intcoord,F,pressure,materialprops)
+	function Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops)
 		! Compute the Kirchhoff stress
 		implicit none
 		
-		integer, intent(in) :: nsd, ned
+		integer, intent(in) :: nsd, materialtype
 		real(8), intent(in) :: pressure
 		real(8), dimension(nsd,nsd), intent(in) :: F
 		real(8), dimension(nsd), intent(in) :: intcoord
 		real(8), dimension(5), intent(in) :: materialprops
-		real(8), dimension(ned,nsd) :: Kirchhoffstress
+		real(8), dimension(nsd,nsd) :: Kirchhoffstress
 		real(8), dimension(nsd,nsd) :: B, Bbar, BB, eye, C
 		integer :: i, j, k
 		real(8) :: mu1, mu2, K1, I1, I2, c1, c2, c3, Ja, I4, I6, lambda, kk1, kk2, R, beta
@@ -186,34 +188,48 @@ contains
 		B = matmul(F,transpose(F))
 		Bbar = B/Ja**(2/3.)
 		BB = matmul(Bbar,Bbar)
+		
 		! I1 I2 denote I1bar I2bar actually
-		I1 = 0.
-		do i=1,nsd
+		if (nsd == 2) then
+			I1 = 1.0
+		else if (nsd == 3) then
+			I1 = 0.0
+		end if
+		do i = 1, nsd
 			I1 = I1 + Bbar(i,i)
 		end do
 	    I2 = I1**2
-		do i=1,nsd
-			do j=1,nsd
+		do i = 1, nsd
+			do j = 1, nsd
 				I2 = I2 - Bbar(i,j)**2
 			end do 
 		end do
 		if (nsd == 2) then
-			I1 = I1 + 1.
-			I2 = I2 - 1.
+			I2 = I2/Ja**(4/3.)
 		end if
 		I2 = I2/2.
+		
 		Kirchhoffstress = 0.
 		
-		if (dAbs(materialprops(1)-4) < 1d-4) then ! Yeoh
-			c1 = materialprops(2)
-			c2 = materialprops(3)
+		if (materialtype == 1) then ! Mooney-Rivlin
+			mu1 = materialprops(3)
+			mu2 = materialprops(4)
+			K1 = materialprops(2)
+			do i=1,nsd
+				do j=1,nsd
+					Kirchhoffstress(i,j) = -1/3.*(mu1*I1+2*mu2*I2)*eye(i,j) - mu2*BB(i,j) + (mu1+mu2*I1)*Bbar(i,j) + Ja*pressure*eye(i,j);
+				end do
+			end do
+		else if (materialtype == 2) then ! Yeoh
+			c1 = materialprops(3)
+			c2 = materialprops(4)
 			c3 = materialprops(5)
-			do i = 1, ned
+			do i = 1, nsd
 				do j = 1, nsd
 					Kirchhoffstress(i,j) = (2*c1 + 4*c2*(I1 - 3) + 6*c3*(I1-3)**2)*(Bbar(i,j) - 1/3.*I1*eye(i,j)) + Ja*pressure*eye(i,j)
 				end do
 			end do
-		else if (dAbs(materialprops(1)-5) < 1d-4) then ! HGO
+		else if (materialtype == 3) then ! HGO
 			! Material parameters are hard-coded
 			beta = 50*3.14159/180
 			R = sqrt((1+(tan(beta))**2)*((intcoord(1))**2 + (intcoord(2))**2))
@@ -234,26 +250,18 @@ contains
 			g = matmul(F,g0)/lambda
 			I6 = I6/Ja**(2/3.)
 			
-			mu1 = materialprops(2)
-			K1 = materialprops(4)
-			do i=1,ned
-				do j=1,nsd
+			mu1 = materialprops(3)
+			K1 = materialprops(2)
+			
+			do i = 1, nsd
+				do j = 1, nsd
 					Kirchhoffstress(i,j) = -1/3.*mu1*I1*eye(i,j) + mu1*Bbar(i,j) + Ja*pressure*eye(i,j);
 					! anisotropic part
 					Kirchhoffstress(i,j) = Kirchhoffstress(i,j) + 2*kk1*( (I4-1)*exp(kk2*(I4-1)**2)*(a(i)*a(j) - 1/3.*eye(i,j))*I4 ) &
 					                     + 2*kk1*( (I6-1)*exp(kk2*(I6-1)**2)*(g(i)*g(j) - 1/3.*eye(i,j))*I6 )
 				end do
 			end do
-		else !neo-Hookean and Mooney-Rivlin
-			mu1 = materialprops(2)
-			mu2 = materialprops(3)
-			K1 = materialprops(4)
-			do i=1,ned
-				do j=1,nsd
-					Kirchhoffstress(i,j) = -1/3.*(mu1*I1+2*mu2*I2)*eye(i,j) - mu2*BB(i,j) + (mu1+mu2*I1)*Bbar(i,j) + Ja*pressure*eye(i,j);
-				end do
-			end do
 		end if
 	end function Kirchhoffstress	
 	
-end module mixed_material
+end module material
