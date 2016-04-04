@@ -59,7 +59,7 @@ contains
 			end do 
 		end do
 		if (nsd == 2) then
-			I2 = I2/Ja**(4/3.)
+			I2 = I2 - 1.0/Ja**(4/3.)
 		end if
 		I2 = I2/2.
 		
@@ -205,7 +205,7 @@ contains
 			end do 
 		end do
 		if (nsd == 2) then
-			I2 = I2/Ja**(4/3.)
+			I2 = I2 - 1.0/Ja**(4/3.)
 		end if
 		I2 = I2/2.
 		

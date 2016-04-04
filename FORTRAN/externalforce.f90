@@ -77,7 +77,7 @@ contains
 				if (nsd == 3) then
 					traction = cross(dydxi(:,1), dydxi(:,2))
 				else if (nsd == 2) then
-					traction(1) =  dydxi(1, 2)
+					traction(1) =  dydxi(2, 1)
 					traction(2) = -dydxi(1, 1)
 				end if
 				! compute the force
