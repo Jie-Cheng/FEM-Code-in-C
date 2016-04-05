@@ -109,9 +109,9 @@ contains
 				call DGETRI(n1,Finv,n1,ipiv,work,n1,info)
 				dNdy = matmul(dNdx, Finv)
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops)
+				call Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops, stress)
 				! compute the material stiffness C_ijkl
-				C = materialstiffness(nsd, intcoord, F, pressure, materialtype, materialprops)
+				call materialstiffness(nsd, intcoord, F, pressure, materialtype, materialprops, C)
 				! compute the element internal force
 				do a = 1, nen
 					do i = 1, nsd
@@ -160,7 +160,7 @@ contains
 		deallocate(weights)
 	end subroutine tangent_internal
 	
-	function tangent_external(dofs)
+	subroutine tangent_external(dofs, Kglo)
 		use read_file, only: nsd,nn,nel,nen,coords,connect, load_size, load_num, load_val
 		use shapefunction
 		use integration
@@ -169,7 +169,7 @@ contains
 		! input argument
 		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
 		! output
-		real(8), dimension(nn*nsd+nel,nn*nsd+nel) :: tangent_external
+		real(8), dimension(nn*nsd+nel,nn*nsd+nel) :: Kglo
 		! Local variables
 		real(8), allocatable, dimension(:,:) :: kext ! Element stiffness 
 		! nodelist
@@ -188,7 +188,7 @@ contains
 		real(8), dimension(nsd) :: normal
 		
 		! initialize
-		tangent_external = 0.
+		Kglo = 0.
 		nfacenodes = face_nodes_no(nsd,nen)
 		npt = int_number(nsd-1, nfacenodes, 0)
 		epsilon = 0.
@@ -254,7 +254,7 @@ contains
 					do b = 1, nfacenodes
 						do k = 1, nsd
 							col = (connect(nodelist(b),ele)-1)*nsd + k
-							tangent_external(row, col) = tangent_external(row,col) + kext(nsd*(a-1)+i, nsd*(b-1)+k)
+							Kglo(row, col) = Kglo(row,col) + kext(nsd*(a-1)+i, nsd*(b-1)+k)
 						end do
 					end do
 				end do
@@ -270,5 +270,5 @@ contains
 		deallocate(dNdxi)
 		deallocate(N)
 		deallocate(kext)
-	end function tangent_external
+	end subroutine tangent_external
 end module tangentstiffness

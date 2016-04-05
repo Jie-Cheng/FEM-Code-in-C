@@ -100,7 +100,7 @@ contains
 				call DGETRI(n1,Finv,n1,ipiv,work,n1,info)	
 				dNdy = matmul(dNdx,Finv)
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd,intcoord,F,pressure,materialtype,materialprops)
+				call Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops, stress)
 				! compute the element internal force
 				do a=1,nen
 					do i=1,nsd

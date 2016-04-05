@@ -29,6 +29,8 @@ contains
 		npt = int_number(nsd,nen,0)
 		allocate(xilist(nsd,npt))
 		allocate(weights(npt))
+		xilist = int_points(nsd,nen,npt)
+		weights = int_weights(nsd,nen,npt)
 			
 		! initialize
 		M = 0.
@@ -39,10 +41,6 @@ contains
 			do a=1,nen
 				elecoord(:,a) = coords(:,connect(a,ele))
 			end do
-			! fully integration
-			! set up integration points and weights
-			xilist = int_points(nsd,nen,npt)
-			weights = int_weights(nsd,nen,npt)
 			! initialize
 			mele = 0.
 			! loop over integration points

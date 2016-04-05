@@ -224,7 +224,7 @@ contains
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
 		
-		rho = materialprops(5)
+		rho = materialprops(1)
 		npt = int_number(nsd, nen, 0)	
 		allocate(xilist(nsd,npt))
 		allocate(weights(npt))
@@ -239,9 +239,7 @@ contains
 				elecoord(:,a) = coords(:,connect(a,ele))
 			end do
 			! compute the force on this element
-			do i=1,nsd*nen
-				f(i) = 0.
-			end do
+			f = 0.
 			! set up integration points and weights
 			xilist = int_points(nsd ,nen,npt)
 			weights = int_weights(nsd,nen,npt)

@@ -10,9 +10,6 @@ FC = gfortran
 main: $(OBJECTS)
 	$(FC) -o main $(OBJECTS) $(LIBS)
 			
-solidsolver.o: $(MODULES) solidsolver.f90
-	$(FC) -c solidsolver.f90
-
 %.mod: %.f90
 	$(FC) -c $<
 	

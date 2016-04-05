@@ -12,9 +12,9 @@ contains
 		end if
 		call write_geometry(filepath,dofs)
 		call write_displacement(filepath,dofs)
-		call write_stress(filepath,dofs)
-		
+		call write_stress(filepath,dofs)	
 	end subroutine write_results
+	
 	subroutine write_case(filepath)
 		use read_file, only: nsteps, nprint, dt, nsd, nn
 		implicit none
@@ -306,8 +306,6 @@ contains
 				dNdx = matmul(dNdxi,dxidx)
 				! deformation gradient, F_ij = delta_ij + dU_i/dx_j
 				F = eye + matmul(eledof,dNdx)
-				! left Cauchy-Green tensor, B = F^TF and Ja = det(F)
-				B = matmul(F,transpose(F))
 				!B = matmul(F,transpose(F))
 				if (nsd == 2) then
 					Ja = F(1,1)*F(2,2) - F(1,2)*F(2,1)
@@ -318,7 +316,7 @@ contains
 				end if
 				vcr(ele) = vcr(ele) + Ja
 				! compute the Kirchhoff stress
-				stress = Kirchhoffstress(nsd,intcoord,F,pressure,materialtype,materialprops)
+				call Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops, stress)
 				! Cauchy stress
 				stress = stress/Ja
 				! vectorize

@@ -19,24 +19,6 @@ module read_file
 contains
 	subroutine read_input(unitnum, filename, mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
 		materialtype, materialprops, gravity, isbinary, penalty)
-		
-		! ********************************************************************************
-		! Read in the user-specified input parameters
-		! unitnum and filename are the unit number and file name of the input file
-		! mode: the type of analysis. 0 -> static, 1 -> dynamic, 2 -> residual, 3 -> debug
-		! maxit: the maximum number of iterations in one timestep
-		! firststep: the step size of the first step
-		! adjust: the adjust factor of automatic stepping
-		! nsteps: number of steps (used only in dynamics analysis)
-		! nprint: interval of printing
-		! tol: tolerance of residual
-		! dt: timestep
-		! damp: damping
-		! materialprops: type, mu1, mu2, K1, rho
-		! gravity: always a 3d vector
-		! isbinary: the format of output file. 1 -> binary, 0 -> ASCII
-		! penalty: penalty parameter
-		! ********************************************************************************
 						  
 		implicit none
 		
@@ -93,17 +75,6 @@ contains
 	subroutine read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
 		
-		! ************************************************************************************************************************
-		! nsd: number of dimensions
-		! nn: number of nodes
-		! nel: number of elements
-		! nen: number of nodes in one element
-		! coords(nsd, nn): coordinates of nodes
-		! connect(nen, nel): connectivity
-		! bc1(3, *): boundary conditions. bc1(1, *) -> node number, bc1(2, *) -> dof number, bc1(3, *) -> value
-		! bc2(*, *): loads. pressure load -> bc2(3, *), traction load -> bc2(2 + nsd, *). element number, face number, value
-		! share(nn): number of elements that share a specific node
-		! ************************************************************************************************************************
 		implicit none
 		
 		integer, intent(out) :: nsd, nen, nn, nel, bc_size, load_size, load_type
@@ -222,5 +193,3 @@ contains
 	end subroutine analyze_pattern
 	
 end module read_file
-	
-	
