@@ -5,8 +5,6 @@ module material
 contains
 	subroutine Kirchhoffstress(nsd, intcoord, F, pressure, materialtype, materialprops, stress)
 		! Compute the Kirchhoff stress
-		use read_file, only: stretch
-		
 		implicit none
 		
 		integer, intent(in) :: nsd, materialtype
@@ -33,7 +31,7 @@ contains
 		
 		! Change B to Bbar and compute Bbar squared
 		if (nsd == 2) then
-			Ja = (F(1,1)*F(2,2) - F(1,2)*F(2,1))*stretch
+			Ja = (F(1,1)*F(2,2) - F(1,2)*F(2,1))
 		else if (nsd == 3) then
 			Ja = F(1,1)*F(2,2)*F(3,3) - F(1,1)*F(3,2)*F(2,3) &
 				  - F(1,2)*F(2,1)*F(3,3) + F(1,2)*F(2,3)*F(3,1) &
@@ -45,7 +43,7 @@ contains
 		
 		! I1 I2 denote I1bar I2bar actually
 		if (nsd == 2) then
-			I1 = stretch**2/Ja**(2/3.)
+			I1 = 1.0/Ja**(2/3.)
 		else if (nsd == 3) then
 			I1 = 0.0
 		end if
@@ -59,7 +57,7 @@ contains
 			end do 
 		end do
 		if (nsd == 2) then
-			I2 = I2 - stretch**4/Ja**(4/3.)
+			I2 = I2 - 1.0/Ja**(4/3.)
 		end if
 		I2 = I2/2.
 		
@@ -113,14 +111,14 @@ contains
 			C = matmul(transpose(F),F)
 			I4 = dot_product(a0,matmul(C,a0))
 			if (nsd == 2) then
-				I4 = I4 + (stretch*sin(beta))**2
+				I4 = I4 + (sin(beta))**2
 			end if
 			lambda4 = sqrt(I4)
 			a = matmul(F,a0)/lambda4
 			I4 = I4/Ja**(2/3.)
 			I6 = dot_product(g0,matmul(C,g0))
 			if (nsd == 2) then
-				I6 = I6 + (stretch*sin(beta))**2
+				I6 = I6 + (sin(beta))**2
 			end if
 			lambda6 = sqrt(I6)
 			g = matmul(F,g0)/lambda6
@@ -143,7 +141,6 @@ contains
 	
 	subroutine materialstiffness(nsd, intcoord, F, pressure, materialtype, materialprops, mstiff)
 		! Compute the material stiffness tensor
-		use read_file, only: stretch
 		implicit none
 	
 		integer, intent(in) :: nsd, materialtype
@@ -168,12 +165,12 @@ contains
 				end if
 			end do
 		end do
-		stretch = 1.7
+		
 		mstiff = 0.
 		
 		! Change B to Bbar and compute Bbar squared
 		if (nsd == 2) then
-			Ja = (F(1,1)*F(2,2) - F(1,2)*F(2,1))*stretch
+			Ja = (F(1,1)*F(2,2) - F(1,2)*F(2,1))
 		else if (nsd == 3) then
 			Ja = F(1,1)*F(2,2)*F(3,3) - F(1,1)*F(3,2)*F(2,3) &
 				  - F(1,2)*F(2,1)*F(3,3) + F(1,2)*F(2,3)*F(3,1) &
@@ -185,7 +182,7 @@ contains
 		
 		! I1 I2 denote I1bar I2bar actually
 		if (nsd == 2) then
-			I1 = stretch**2/Ja**(2/3.)
+			I1 = 1.0/Ja**(2/3.)
 		else if (nsd == 3) then
 			I1 = 0.0
 		end if
@@ -199,7 +196,7 @@ contains
 			end do 
 		end do
 		if (nsd == 2) then
-			I2 = I2 - stretch**4/Ja**(4/3.)
+			I2 = I2 - 1.0/Ja**(4/3.)
 		end if
 		I2 = I2/2.
 		
@@ -269,14 +266,14 @@ contains
 			C = matmul(transpose(F),F)
 			I4 = dot_product(a0,matmul(C,a0))
 			if (nsd == 2) then
-				I4 = I4 + (stretch*sin(beta))**2
+				I4 = I4 + (sin(beta))**2
 			end if
 			lambda4 = sqrt(I4)
 			a = matmul(F,a0)/lambda4
 			I4 = I4/Ja**(2/3.)
 			I6 = dot_product(g0,matmul(C,g0))
 			if (nsd == 2) then
-				I6 = I6 + (stretch*sin(beta))**2
+				I6 = I6 + (sin(beta))**2
 			end if
 			lambda6 = sqrt(I6)
 			g = matmul(F,g0)/lambda6

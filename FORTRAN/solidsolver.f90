@@ -17,7 +17,7 @@ program solidsolver
 	filepath = '/Users/jiecheng/Documents/SolidResults/'
 	call system_clock(ct,ct_rate,ct_max)
 	call read_input(10, 'input.txt', mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
-		materialtype, materialprops, gravity, isbinary, penalty, stretch)
+		materialtype, materialprops, gravity, isbinary, penalty)
 	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
 	!call analyze_pattern(nsd, nn, nel, nen, NE, IRN, JCN, NONZEROS);

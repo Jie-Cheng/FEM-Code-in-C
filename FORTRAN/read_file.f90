@@ -18,7 +18,7 @@ module read_file
 	
 contains
 	subroutine read_input(unitnum, filename, mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
-		materialtype, materialprops, gravity, isbinary, penalty, stretch)
+		materialtype, materialprops, gravity, isbinary, penalty)
 						  
 		implicit none
 		
@@ -31,7 +31,7 @@ contains
 		real(8) :: temp(21)
 	
 		integer, intent(out) :: mode, maxit, nsteps, nprint, isbinary, materialtype
-		real(8), intent(out) :: firststep, adjust, tol, dt, damp, materialprops(5), gravity(3), penalty, stretch
+		real(8), intent(out) :: firststep, adjust, tol, dt, damp, materialprops(5), gravity(3), penalty
 	
 		open(unit = unitnum, file = filename)
 		i = 0
@@ -68,8 +68,6 @@ contains
 		
 		materialtype = int(temp(15))
 		materialprops(:) = temp(16:20)
-		
-		stretch = temp(21)
 	
 		close(10)
 	end subroutine read_input
@@ -115,9 +113,6 @@ contains
 		load_type = load_type - 2
 		allocate(load_num(2, load_size))
 		allocate(load_val(load_type, load_size))
-		do i = 1, load_size
-			read(10, *) load_num(:, i), load_val(:, i)
-		end do
 		close(10)
 		
 		allocate(share(nn))
