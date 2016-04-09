@@ -20,7 +20,6 @@ program solidsolver
 		materialtype, materialprops, gravity, isbinary, penalty)
 	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
-	!call analyze_pattern(nsd, nn, nel, nen, NE, IRN, JCN, NONZEROS);
 	if (mode == 0) then 
 		call statics(filepath)
 	else if (mode == 1) then

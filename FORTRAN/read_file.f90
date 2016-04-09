@@ -3,7 +3,7 @@ module read_file
 	implicit none
 	
 	integer :: mode, maxit, nsteps, nprint, step, isbinary, materialtype
-	real(8) :: firststep, adjust, tol, dt, damp, penalty, stretch
+	real(8) :: firststep, adjust, tol, dt, damp, penalty
 	real(8) :: materialprops(5), gravity(3)
 	integer :: nsd, nen, nn, nel, bc_size, load_size, load_type
 	integer, allocatable :: connect(:, :), bc_num(:, :), load_num(:, :)
@@ -28,7 +28,7 @@ contains
 		character(100) :: text
 		character(1) :: flag = ':'
 		integer :: i, j, k, l, ios
-		real(8) :: temp(21)
+		real(8) :: temp(20)
 	
 		integer, intent(out) :: mode, maxit, nsteps, nprint, isbinary, materialtype
 		real(8), intent(out) :: firststep, adjust, tol, dt, damp, materialprops(5), gravity(3), penalty
@@ -113,6 +113,9 @@ contains
 		load_type = load_type - 2
 		allocate(load_num(2, load_size))
 		allocate(load_val(load_type, load_size))
+		do i = 1, load_size
+			read(10, *) load_num(:, i), load_val(:, i)
+		end do
 		close(10)
 		
 		allocate(share(nn))
