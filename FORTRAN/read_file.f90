@@ -10,9 +10,9 @@ module read_file
 	real(8), allocatable :: coords(:, :), bc_val(:), load_val(:, :)
 	integer, allocatable :: share(:)
 	
-	integer :: NE
-	integer, allocatable :: IRN(:), JCN(:)
-	real(8), allocatable :: NONZEROS(:)
+	integer :: no_nonzeros
+	integer, allocatable :: irn(:), jcn(:), map(:)
+	real(8), allocatable :: nonzeros(:)
 	
 	save
 	
@@ -130,16 +130,33 @@ contains
 	
 	end subroutine read_mesh
 	
-	subroutine analyze_pattern(nsd, nn, nel, nen, NE, IRN, JCN, NONZEROS)
+	function position(row, col, ndofs)
 		implicit none
-		integer, intent(in) :: nsd, nn, nel, nen
-		integer, intent(inout) :: NE
-		integer, allocatable, intent(inout) :: IRN(:), JCN(:)
-		real(8), allocatable, intent(inout) :: NONZEROS(:)
-		integer :: i, j, a, b, row, col, ele
+		integer, intent(in) :: row, col, ndofs
+		integer :: position
+		position = (2*ndofs - row + 2)*(row - 1)/2 + col - row + 1
+	end function position
+	
+	subroutine initial_compress(ndofs, no_nonzeros, irn, jcn, map, nonzeros)
+		implicit none
+		integer, intent(in) :: ndofs
+		integer, intent(inout) :: no_nonzeros
+		integer, allocatable, intent(inout) :: irn(:), jcn(:), map(:)
+		real(8), allocatable, intent(inout) :: nonzeros(:)
 		
-		NE = 0
+		integer, allocatable :: flag(:)
+		integer :: i, j, a, b, row, col, ele, pos, n, count, maxsize
 		
+		no_nonzeros = 0
+		count = 0		
+		maxsize = (ndofs**2 + ndofs)/2
+		
+		allocate(map( maxsize ))
+		allocate(flag( maxsize ))
+		map = 0
+		flag = 0
+		
+		! Count the no_nonzeros in the upper triangle
 		do ele = 1, nel
 			do a = 1, nen
 				do i = 1, nsd
@@ -147,23 +164,37 @@ contains
 					do b = 1, nen
 						do j = 1, nsd
 							col = nsd*(connect(b, ele) - 1) + j
-							NE = NE + 1
+							if (col >= row) then
+								pos = position(row, col, ndofs)
+								map(pos) = 1
+							end if
 						end do
 					end do
 					col = nsd*nn + ele
-					NE = NE + 1
+					if (col >= row) then
+						pos = position(row, col, ndofs)
+						map(pos) = 1
+					end if
 				end do
 			end do
 			row = nsd*nn + ele
 			col = nsd*nn + ele
-			NE = NE + 1
+			pos = position(row, col, ndofs)
+			map(pos) = 1
 		end do
 		
-		allocate(IRN(NE))
-		allocate(JCN(NE))
-		allocate(NONZEROS(NE))
+		do i = 1, maxsize
+			if (map(i) == 1) then
+				no_nonzeros = no_nonzeros + 1
+			end if
+		end do
 		
-		NE = 0
+		allocate(nonzeros(no_nonzeros))
+		allocate(irn(no_nonzeros))
+		allocate(jcn(no_nonzeros))
+		
+		! Modify map so that map(pos) gives the number in the nonzeros
+		! flag is used to indicate whether a pos has been taken before
 		do ele = 1, nel
 			do a = 1, nen
 				do i = 1, nsd
@@ -171,25 +202,47 @@ contains
 					do b = 1, nen
 						do j = 1, nsd
 							col = nsd*(connect(b, ele) - 1) + j
-							NE = NE + 1
-							IRN(NE) = row
-							JCN(NE) = col
+							if (col >= row) then
+								pos = position(row, col, ndofs)
+								if (flag(pos) /= 1) then
+									count = count + 1
+									map(pos) = count
+									irn(count) = row
+									jcn(count) = col
+									flag(pos) = 1
+								end if
+							end if
 						end do
 					end do
 					col = nsd*nn + ele
-					NE = NE + 1
-					IRN(NE) = row
-					JCN(NE) = col
+					if (col >= row) then
+						pos = position(row, col, ndofs)
+						if (flag(pos) /= 1) then
+							count = count + 1
+							map(pos) = count
+							irn(count) = row
+							jcn(count) = col
+							flag(pos) = 1
+						end if
+					end if
 				end do
 			end do
 			row = nsd*nn + ele
 			col = nsd*nn + ele
-			NE = NE + 1
-			IRN(NE) = row
-			JCN(NE) = col
+			pos = position(row, col, ndofs)
+			if (flag(pos) /= 1) then
+				count = count + 1
+				map(pos) = count
+				irn(count) = row
+				jcn(count) = col
+				flag(pos) = 1
+			end if
 		end do
-							
-		write(*,'(e12.4)') NE*1.0/((nsd*nn + nel)**2)
-	end subroutine analyze_pattern
+		
+		nonzeros = 0.0
+		
+		deallocate(flag)
+		
+	end subroutine initial_compress
 	
 end module read_file

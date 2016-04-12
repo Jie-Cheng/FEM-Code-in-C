@@ -2,16 +2,17 @@ module symmetric_solver
 	implicit none
 	
 contains
-	subroutine ma57ds(ndofs,Ain,R,dw)
+	subroutine ma57ds(nonzeros, ndofs, R, dw)
+		use read_file, only: irn, jcn, no_nonzeros
 		implicit none
 		integer, intent(in) :: ndofs
-		real(8), dimension(ndofs,ndofs), intent(in) :: Ain
+		real(8), dimension(no_nonzeros), intent(in) :: nonzeros
 		real(8), dimension(ndofs), intent(in) :: R
 		real(8), dimension(ndofs), intent(out) :: dw
 		! MA57 parameters
 		integer :: n, ne, job, lrhs, lwork, nrhs, lkeep, lifact, lfact
-		integer, allocatable :: irn(:), jcn(:), keep(:), iwork(:), ifact(:)
-		real(8), allocatable :: rhs(:), fact(:), work(:), a(:)
+		integer, allocatable :: keep(:), iwork(:), ifact(:)
+		real(8), allocatable :: fact(:), work(:)
 		real(8), dimension(5) :: cntl
 		integer, dimension(20) :: icntl
 		integer, dimension(40) :: info
@@ -23,68 +24,34 @@ contains
 	
 		! Set default values for control parameters
 		call MA57ID(cntl,icntl)
-		
-		! Count the nonzeros
 		n = ndofs
-		ne = 0
-		k = 0
-		do j=1,n
-			do i=j,n
-				if (Ain(i,j) /= 0.) then
-					ne = ne + 1
-				end if
-			end do
-		end do
-		allocate(irn(ne))
-		allocate(jcn(ne))
-		allocate(a(ne))
-		allocate(rhs(n))
-		rhs = R
-		do j=1,n
-			do i=j,n
-				if (Ain(i,j) /= 0.) then
-					k = k + 1
-					irn(k) = i
-					jcn(k) = j
-					a(k) = Ain(i,j)
-				end if
-			end do
-		end do
+		ne = no_nonzeros
 		
 		! Set printing option
 		icntl(5) = 1
-		
 		! Analyse sparsity pattern
-		lkeep = 7*n+ne+max(n,ne)+42
+		lkeep = 7*n + ne + max(n, ne) + 42
 		allocate(keep(lkeep))
 		allocate(iwork(5*n))
-		call MA57AD(n,ne,irn,jcn,lkeep,keep,iwork,icntl,info,rinfo)
-	
+		call MA57AD(n, ne, irn, jcn, lkeep, keep, iwork, icntl, info, rinfo)
 		! Factorize matrix
-		lfact = 100*info(9)
+		lfact = 2*info(9)
 		allocate(fact(lfact))
-		lifact = 100*info(10)
+		lifact = 2*info(10)
 		allocate(ifact(lifact))
-		call MA57BD(n,ne,a,fact,lfact,ifact,lifact,lkeep,keep,iwork,icntl,cntl,info,rinfo)
-	
+		call MA57BD(n, ne, nonzeros, fact, lfact, ifact, lifact, lkeep, keep, iwork, icntl, cntl, info, rinfo)
 		! Solve the equations
 		job = 1
 		lrhs = n
 		nrhs = 1
 		lwork = n*nrhs
 		allocate(work(lwork))
-		call MA57CD(job,n,fact,lfact,ifact,lifact,1,rhs,lrhs,work,lwork,iwork,icntl,info)
-	
-		dw = rhs
-	
-		deallocate(irn)
-		deallocate(jcn)
+		call MA57CD(job, n, fact, lfact, ifact, lifact, 1, R, lrhs, work, lwork, iwork, icntl, info)
+		dw = R
 		deallocate(keep)
 		deallocate(iwork)
 		deallocate(ifact)
-		deallocate(rhs)
 		deallocate(fact)
 		deallocate(work)
-		deallocate(a)
 	end subroutine ma57ds
 end module symmetric_solver

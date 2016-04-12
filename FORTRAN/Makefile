@@ -11,6 +11,9 @@ FC = gfortran
 main: $(OBJECTS)
 	$(FC) -o main $(OBJECTS) $(LIBS)
 
+symmetric_solver.o: symmetric_solver.f90 read_file.mod
+	$(FC) -c symmetric_solver.f90
+
 internalforce.o: internalforce.f90 read_file.mod shapefunction.mod integration.mod material.mod
 	$(FC) -c internalforce.f90
 

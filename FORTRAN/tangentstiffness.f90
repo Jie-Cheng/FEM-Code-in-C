@@ -10,14 +10,13 @@ contains
 		cross(3) = a(1)*b(2) - a(2)*b(1)
 	end function cross
 	
-	subroutine tangent_internal(dofs, Kglo)
-		use read_file, only: nsd, nn, coords, nel, nen, connect, materialtype, materialprops
+	subroutine tangent_internal(dofs)
+		use read_file
 		use shapefunction
 		use integration
 		use material
 		implicit none
 		real(8), dimension(nn*nsd+nel), intent(in) :: dofs
-		real(8), dimension(nn*nsd+nel,nn*nsd+nel), intent(inout) :: Kglo
 		real(8), dimension(nsd,nsd,nsd,nsd) :: C
 		real(8), dimension(nsd,nen) :: elecoord
 		real(8), dimension(nsd,nen) :: eledof
@@ -29,7 +28,7 @@ contains
 		real(8), dimension(nsd,nsd) :: dxdxi, dxidx, F, Finv, B, eye
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
-		integer :: ele,a,i,npt,j,row,intpt,l,d,k,col
+		integer :: ele,a,i,npt,j,row,intpt,l,d,k,col,pos
 		real(8) :: det, Ja, pressure
 		real(8), dimension(nsd) :: work ! for lapack inverse
 		integer, dimension(nsd) :: ipiv ! for lapack inverse
@@ -51,7 +50,7 @@ contains
 		end do
 		
 		! initialize 
-		Kglo = 0.
+		nonzeros = 0.0
 				
 		! allocate
 		npt = int_number(nsd,nen,0)
@@ -140,22 +139,31 @@ contains
 			! scatter the element kint into the global Kglo
 			do a = 1, nen
 				do i = 1, nsd
+					row = nsd*(connect(a, ele) - 1) + i
 					do d = 1, nen
 						do k = 1, nsd
-							row = nsd*(connect(a, ele) - 1) + i
 							col = nsd*(connect(d, ele) - 1) + k
-		                    Kglo(row, col) = Kglo(row, col) + kint(nsd*(a-1)+i,nsd*(d-1)+k)
+							if (col >= row) then
+								pos = position(row, col, nn*nsd+nel)
+								pos = map(pos)
+								nonzeros(pos) = nonzeros(pos) + kint(nsd*(a-1)+i,nsd*(d-1)+k)
+		                    end if
 						end do
 					end do
-					row = nsd*(connect(a, ele)-1) + i
 					col = nsd*nn + ele
-					Kglo(row, col) = Kglo(row, col) + kint(nsd*(a-1)+i,nsd*nen+1)
-					Kglo(col, row) = Kglo(row, col)
+					if (col >= row) then
+						pos = position(row, col, nn*nsd+nel)
+						pos = map(pos)
+						nonzeros(pos) = nonzeros(pos) + kint(nsd*(a-1)+i,nsd*nen+1)
+					end if
 				end do
 			end do
-			Kglo(nsd*nn+ele,nsd*nn+ele) = Kglo(nsd*nn+ele,nsd*nn+ele) + kint(nsd*nen+1,nsd*nen+1)
+			row = nn*nsd + ele
+			col = nn*nsd + ele
+			pos = position(row, col, nn*nsd+nel)
+			pos = map(pos)
+			nonzeros(pos) = nonzeros(pos) + kint(nsd*nen+1,nsd*nen+1)
 		end do
-		
 		deallocate(xilist)
 		deallocate(weights)
 	end subroutine tangent_internal

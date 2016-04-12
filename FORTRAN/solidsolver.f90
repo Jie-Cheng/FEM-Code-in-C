@@ -20,6 +20,7 @@ program solidsolver
 		materialtype, materialprops, gravity, isbinary, penalty)
 	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
+	call initial_compress(nn*nsd+nel, no_nonzeros, irn, jcn, map, nonzeros)
 	if (mode == 0) then 
 		call statics(filepath)
 	else if (mode == 1) then
@@ -55,12 +56,10 @@ subroutine statics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k
+	integer :: i, nit, row, col, j, k, pos
 	real(8), allocatable, dimension(:) :: Fext, Fint, R, w, w1, dw
-	real(8), allocatable, dimension(:,:) ::  A
 	real(8) :: loadfactor, increment, err1, err2
 	real(8), dimension(bc_size) :: constraint
-	real(8), dimension(bc_size, nn*nsd) :: der_constraint
 	character(80), intent(in) :: filepath
 	
 	allocate(Fext(nn*nsd+nel))
@@ -69,12 +68,10 @@ subroutine statics(filepath)
 	allocate(w(nn*nsd+nel))
 	allocate(w1(nn*nsd+nel))
 	allocate(dw(nn*nsd+nel))
-	allocate(A(nn*nsd+nel,nn*nsd+nel))
 	
 	! initialize w
 	w = 0.
 	constraint = 0.
-	der_constraint = 0.
 	
 	nprint = 1
 	nsteps = 1
@@ -107,18 +104,19 @@ subroutine statics(filepath)
 			if (load_type == 1) then
 				call force_pressure(w, Fext)
 			end if
-			call tangent_internal(w, A)
+			call tangent_internal(w)
 			R = Fint - loadfactor*Fext
 			! penalty
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				der_constraint(i,row) = 1.
-				A(row,row) = A(row,row) + penalty*der_constraint(i, row)*der_constraint(i, row)
-				R(row) = R(row) + penalty*der_constraint(i, row)*constraint(i)
+				pos = position(row, row, nn*nsd+nel)
+				pos = map(pos)
+				nonzeros(pos) = nonzeros(pos) + penalty
+				R(row) = R(row) + penalty*constraint(i)
 			end do
 			! Solve
-			call ma57ds(nn*nsd + nel, A, -R, dw)
+			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)
 			w = w + dw
 			! check convergence
 			err1 = sqrt(dot_product(dw, dw)/dot_product(w, w))
@@ -146,7 +144,6 @@ subroutine statics(filepath)
 	deallocate(w)
 	deallocate(w1)
 	deallocate(dw)
-	deallocate(A)
 	
 end subroutine statics
 
@@ -166,12 +163,10 @@ subroutine dynamics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k
-	real(8), allocatable, dimension(:) :: Fext, Fint, F, R, un, un1, vn, vn1, an, an1, w, dw
-	real(8), allocatable, dimension(:,:) ::  A, M
+	integer :: i, nit, row, col, j, k, pos
+	real(8), allocatable, dimension(:) :: Fext, Fint, F, R, un, un1, vn, vn1, an, an1, w, dw, mass_nonzeros
 	real(8) :: loadfactor, increment, err1, err2, gamma, beta
 	real(8), dimension(bc_size) :: constraint
-	real(8), dimension(bc_size, nn*nsd) :: der_constraint
 	character(80), intent(in) :: filepath
 	
 	allocate(Fext(nn*nsd+nel))
@@ -186,8 +181,7 @@ subroutine dynamics(filepath)
 	allocate(vn1(nn*nsd+nel))
 	allocate(an(nn*nsd+nel))
 	allocate(an1(nn*nsd+nel))
-	allocate(A(nn*nsd+nel,nn*nsd+nel))
-	allocate(M(nn*nsd+nel,nn*nsd+nel))
+	allocate(mass_nonzeros(no_nonzeros))
 	
 	! initialization
 	w = 0.
@@ -198,7 +192,6 @@ subroutine dynamics(filepath)
 	an = 0.
 	an1 = 0.
 	constraint = 0.
-	der_constraint = 0.
 	gamma = 0.5
 	beta = 0.25
 	nprint = 20
@@ -209,7 +202,7 @@ subroutine dynamics(filepath)
 	step = 0
 	
 	call write_results(filepath,w)
-	call mass_matrix(M)
+	call mass_matrix(mass_nonzeros)
 	
 	! If the external load is traction, then the external force doesn't change
 	if (load_type /= 1) then
@@ -220,13 +213,20 @@ subroutine dynamics(filepath)
 	do i = 1, bc_size
 		row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 		do col = 1, nn*nsd
-			M(row, col) = 0.
-			M(col, row) = 0.
+			if (col >= row) then
+				pos = position(row, col, nn*nsd+nel)
+				pos = map(pos)
+				if (pos /= 0) then
+					mass_nonzeros(pos) = 0.
+				end if
+			end if
 		end do
-		M(row, row) = 1.
+		pos = position(row, row, nn*nsd+nel)
+		pos = map(pos)
+		mass_nonzeros(pos) = 1.
 		F(row) = 0.
 	end do
-	call ma57ds(nn*nsd+nel,M,F,an)
+	call ma57ds(mass_nonzeros, nn*nsd+nel, F, an)
 	
 	do step = 1, nsteps
 		w = un
@@ -244,22 +244,43 @@ subroutine dynamics(filepath)
 				call force_pressure(w, Fext)
 			end if
 			F = Fext - Fint - damp*vn1
-			call tangent_internal(w, A)
-			R = matmul(M, an1) - F
+			call tangent_internal(w)
+			!R = matmul(M, an1) - F
+			do i = 1, nn*nsd+nel
+				R(i) = 0.0
+				do j = 1, nn*nsd+nel
+					if (j >= i) then
+						pos = position(i, j, nn*nsd+nel)
+						pos = map(pos)
+					else
+						pos = position(j, i, nn*nsd+nel)
+						pos = map(pos)
+					end if
+					if (pos /= 0) then
+						R(i) = R(i) + mass_nonzeros(pos)*an1(j)
+					end if
+				end do
+				R(i) = R(i) - F(i)
+			end do
 			! penalty
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				der_constraint(i,row) = 1.
-				A(row,row) = A(row,row) + penalty*der_constraint(i, row)*der_constraint(i, row)
-				R(row) = R(row) + penalty*der_constraint(i, row)*constraint(i)
+				pos = position(row, row, nn*nsd+nel)
+				pos = map(pos)
+				nonzeros(pos) = nonzeros(pos) + penalty
+				R(row) = R(row) + penalty*constraint(i)
 			end do
-			A = M/beta*dt**2 + A
+			do i = 1, no_nonzeros
+				nonzeros(i) = nonzeros(i) + mass_nonzeros(i)/beta*dt**2
+			end do
 			do i = 1, nn*nsd
-				A(i,i) = A(i,i) + damp*gamma*dt
+				pos = position(i, i, nn*nsd+nel)
+				pos = map(pos)
+				nonzeros(pos) = nonzeros(pos) + damp*gamma*dt
 			end do
 			! Solve
-			call ma57ds(nn*nsd+nel, A, -R, dw)
+			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)
 			w = w + dw
 			! check convergence
 			err1 = sqrt(dot_product(dw,dw)/dot_product(w,w))
@@ -289,8 +310,6 @@ subroutine dynamics(filepath)
 	deallocate(vn1)
 	deallocate(an)
 	deallocate(an1)
-	deallocate(A)
-	deallocate(M)
 	
 end subroutine dynamics
 

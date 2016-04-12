@@ -3,14 +3,14 @@ module mass
 	implicit none
 	
 contains
-	subroutine mass_matrix(M)
-		use read_file, only:  nsd, nn, coords, nel, nen, connect, materialprops
+	subroutine mass_matrix(mass_nonzeros)
+		use read_file
 		use shapefunction
 		use integration
 		
 		implicit none
 		
-		real(8), dimension(nn*nsd+nel,nn*nsd+nel), intent(out) :: M
+		real(8), dimension(no_nonzeros), intent(out) :: mass_nonzeros
 		real(8), dimension(nen*nsd,nen*nsd) :: mele
 		real(8), dimension(nsd,nen) :: elecoord
 		real(8), dimension(nsd,nen) :: eledof
@@ -18,7 +18,7 @@ contains
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
 		real(8), dimension(nen) :: N
-		integer :: ele,a,b,i,j,npt,k,intpt,row,col
+		integer :: ele,a,b,i,j,npt,k,intpt,row,col,pos
 		real(8) :: det, rho
 		real(8), dimension(nsd) :: xi
 		real(8), dimension(nen,nsd) :: dNdxi 
@@ -33,7 +33,7 @@ contains
 		weights = int_weights(nsd,nen,npt)
 			
 		! initialize
-		M = 0.
+		mass_nonzeros = 0.
 		
 		! loop over elements
 		do ele=1,nel
@@ -72,11 +72,15 @@ contains
 			! scatter
 			do a=1,nen
 				do i=1,nsd
+					row = nsd*(connect(a,ele)-1)+i
 					do b=1,nen
 						do k=1,nsd
-							row = nsd*(connect(a,ele)-1)+i
 							col = nsd*(connect(b,ele)-1)+k
-							M(row,col) = M(row,col) + mele(nsd*(a-1)+i,nsd*(b-1)+k)
+							if (col >= row) then
+								pos = position(row, col, nn*nsd+nel)
+								pos = map(pos)
+								mass_nonzeros(pos) = mass_nonzeros(pos) + mele(nsd*(a-1)+i,nsd*(b-1)+k)
+		                    end if
 						end do
 					end do
 				end do
