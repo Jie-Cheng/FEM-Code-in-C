@@ -14,7 +14,7 @@ program solidsolver
 	integer :: ct, ct_rate, ct_max, ct1
 	real(8) :: time_elapsed  
 	call timestamp()
-	filepath = '/Users/jiecheng/Documents/SolidResults/'
+	filepath = '/Users/Jie/Documents/SolidResults/'
 	call system_clock(ct,ct_rate,ct_max)
 	call read_input(10, 'input.txt', mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
 		materialtype, materialprops, gravity, isbinary, penalty)
@@ -123,7 +123,6 @@ subroutine statics(filepath)
 			err2 = sqrt(dot_product(R, R))/(nsd*nn + nel)
 			write(*,'("Iteration number:",i8,5x,"Err1:",E12.4,5x,"Err2:",E12.4,5x,"Tolerance:",E12.4)') nit, err1, err2, tol
 		end do
-		
 		if (nit == maxit) then
 			w = w1
 			loadfactor = loadfactor - increment
@@ -136,7 +135,7 @@ subroutine statics(filepath)
 	end do
 	step = nprint
 	call write_results(filepath,w)
-	write(*,*) repeat("=", 95) 
+	write(*,*) repeat("=", 95)
 	
 	deallocate(Fext)
 	deallocate(Fint)

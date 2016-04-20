@@ -1,20 +1,19 @@
 #include <math.h>
+#include <petscksp.h>
+#include "global_variables.h"
 #include "tangent_stiffness.h"
 #include "helpers.h"
 #include "shape.h"
 #include "integration.h"
 #include "material.h"
 
-void InternalTangent(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
-	double coords[nn][nsd], int connect[nel][nen], int materialtype, \
-	double materialprops[5], double kglo[nn*nsd+nel][nn*nsd+nel]) {
+int InternalTangent(Vec* dofs, Mat* kglo) {
+	PetscErrorCode ierr;
 
-	int i, j, k, l, a, b, ele, row, col;
+	int i, j, k, l, a, b, ele, row, col, intpt;
 	double kappa = materialprops[1];
 
-	for (i = 0; i < nn*nsd+nel; ++i)
-		for (j = 0; j < nn*nsd+nel; ++j)
-			kglo[i][j] = 0.0;
+	ierr = MatZeroEntries(*kglo); CHKERRQ(ierr);
 
 	int npt = IntNum(nsd, nen, 0); // Number of integration points
 	double xilist[npt][nsd]; // Natural coordinates of the integration points
@@ -31,56 +30,43 @@ void InternalTangent(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel],
 		for (i = 0; i < nen; ++i) {
 			for (j = 0; j < nsd; ++j) {
 				elecoord[i][j] = coords[connect[ele][i]-1][j];
-				eledof[i][j] = dofs[nsd*(connect[ele][i]-1)+j];
+				int id = nsd*(connect[ele][i]-1)+j;
+				ierr = VecGetValues(*dofs, 1, &id, &eledof[i][j]); CHKERRQ(ierr);
 			}
 		}
-		pressure = dofs[nsd*nn+ele];
+		int id = nsd*nn + ele;
+		ierr = VecGetValues(*dofs, 1, &id, &pressure); CHKERRQ(ierr);
 		for (i = 0; i < nen*nsd+1; ++i) {
 			for (j = 0; j < nen*nsd+1; ++j) {
 				kele[i][j] = 0.0;
 			}
 		}
-		int intpt;
 		for (intpt = 0; intpt < npt; ++intpt) {
 			double N[nen]; // The nodal values of the shape functions
 			ShapeFun(nsd, xilist[intpt], nen, N);
 			double intcoord[nsd];
-			MatMul('T', 'N', nsd, 1, nen, 1.0, 0.0, elecoord[0], N, intcoord); // MatMulVec(elecoord^T, N)
+			MatMultTranspose_(nen, nsd, elecoord, N, intcoord); // elecoord^T * N
 			double dNdxi[nen][nsd];
 			ShapeDer(nsd, xilist[intpt], nen, dNdxi);
 			double dxdxi[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, elecoord[0], dNdxi[0], dxdxi[0]); // MatMulMat(elecoord^T, dNdxi)
+			MatTransposeMatMult_(nsd, nen, nsd, elecoord, dNdxi, dxdxi); // elecoord^T * dNdxi
 			double det = Determinant(nsd, dxdxi);
 			double dxidx[nsd][nsd];
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					dxidx[i][j] = dxdxi[i][j];
-				}
-			}
-			Inverse(nsd, dxidx[0]);
+			InvertDirect(nsd, dxdxi, dxidx);
 			double dNdx[nen][nsd];
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdxi[0], dxidx[0], dNdx[0]); // MatMulMat(dNdxi, dxidx)
+			MatMatMult_(nen, nsd, nsd, dNdxi, dxidx, dNdx); // dNdxi * dxidx
 			double F[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, eledof[0], dNdx[0], F[0]); // eye + MatMul(eledof^T, dNdx)
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					F[i][j] += 1.0;
-				}
-			}
+			MatTransposeMatMult_(nsd, nen, nsd, eledof, dNdx, F); // I + eledof^T * dNdx
+			MatMatAdd_(nsd, nsd, F, i3, F);
 			double Finv[nsd][nsd];
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					Finv[i][j] = F[i][j];
-				}
-			}
-			Inverse(nsd, Finv[0]);
-			double dNdy[nen][nsd]; 
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdx[0], Finv[0], dNdy[0]); // MatMul(dNdx, Finv)
+			InvertDirect(nsd, F, Finv);
+			double dNdy[nen][nsd];
+			MatMatMult_(nen, nsd, nsd, dNdx, Finv, dNdy); // dNdx * Finv
 			double J = Determinant(nsd, F);
 			double stress[nsd][nsd];
-			KirchhoffStress(nsd, intcoord, F, pressure, materialtype, materialprops, stress);
+			KirchhoffStress(intcoord, F, pressure, stress);
 			double C[nsd][nsd][nsd][nsd];
-			MaterialStiffness(nsd, intcoord, F, pressure, materialtype, materialprops, C);
+			MaterialStiffness(intcoord, F, pressure, C);
 			for (a = 0; a < nen; ++a) {
 				for (i = 0; i < nsd; ++i) {
 					row = a*nsd + i;
@@ -109,14 +95,21 @@ void InternalTangent(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel],
 				for (b = 0; b < nen; ++b) {
 					for (k = 0; k < nsd; ++k) {
 						col = nsd*(connect[ele][b]-1) + k;
-						kglo[row][col] += kele[nsd*a+i][nsd*b+k];
+						ierr = MatSetValue(*kglo, row, col, kele[nsd*a+i][nsd*b+k], ADD_VALUES); CHKERRQ(ierr);
+						//kglo[row][col] += kele[nsd*a+i][nsd*b+k];
 					}
 				}
 				col = nsd*nn + ele;
-				kglo[row][col] += kele[nsd*a+i][nsd*nen];
-				kglo[col][row]  = kglo[row][col];
+				ierr = MatSetValue(*kglo, row, col, kele[nsd*a+i][nsd*nen], ADD_VALUES); CHKERRQ(ierr);
+				ierr = MatSetValue(*kglo, col, row, kele[nsd*a+i][nsd*nen], ADD_VALUES); CHKERRQ(ierr);
+				//kglo[row][col] += kele[nsd*a+i][nsd*nen];
+				//kglo[col][row]  = kglo[row][col];
 			}
 		}
-		kglo[nsd*nn+ele][nsd*nn+ele] += kele[nsd*nen][nsd*nen];
+		ierr = MatSetValue(*kglo, nsd*nn+ele, nsd*nn+ele, kele[nsd*nen][nsd*nen], ADD_VALUES); CHKERRQ(ierr);
+		//kglo[nsd*nn+ele][nsd*nn+ele] += kele[nsd*nen][nsd*nen];
 	}
+	ierr = MatAssemblyBegin(*kglo, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+	ierr = MatAssemblyEnd(*kglo, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+	return 0;
 } 

@@ -1,10 +1,8 @@
 #include "face.h"
-#include <stdlib.h>
-
 
 int FaceNum(const int nsd, const int nen) {
     // The number of faces in an element.
-    int n;
+    int n = 0;
     if (nsd == 2) {
         if (nen == 3) n = 3;
         else if (nen == 4) n = 4;
@@ -17,7 +15,7 @@ int FaceNum(const int nsd, const int nen) {
 
 int FaceNumNodes(const int nsd, const int nen) {
     // The number of nodes on a face
-    int n;
+    int n = 0;
     if (nsd == 2) {
         if (nen == 3 || nen == 4) n = 2;
     }
@@ -28,19 +26,18 @@ int FaceNumNodes(const int nsd, const int nen) {
     return n;
 }
 
-
 void FaceNodes(const int nsd, const int nen, const int nfacenodes, const int face, int p[nfacenodes]) {
     // The ids of the nodes on a face
     // Assuming p[FaceNumNodes(nsd, nen)]
-    int i3[] = {2, 3, 1};
-    int i4[] = {2, 3, 4, 1};
+    int temp3[] = {2, 3, 1};
+    int temp4[] = {2, 3, 4, 1};
     if (nsd == 2) {
         if (nen == 3) {
             p[0] = face;
-            p[1] = i3[face-1];
+            p[1] = temp3[face-1];
         } else if (nen == 4) {
             p[0] = face;
-            p[1] = i4[face-1];
+            p[1] = temp4[face-1];
         }
     } else if (nsd == 3) {
         if (nen == 4) {

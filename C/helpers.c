@@ -1,23 +1,15 @@
 #include "helpers.h"
-#include <math.h>
 
-extern void DGETRF_(int* M, int *N, double* A, int* LDA, int* IPIV, int* INFO);
-extern void DGETRI_(int* N, double* A, int* LDA, int* IPIV, double* WORK, int* LWORK, int* INFO);
-extern void DGEMM_(char* TRANSA, char* TRANSB, int* M, int* N, int* K, \
-	double* ALPHA, double* A, int* LDA, double* B, int* LDB, double* BETA, double* C, int* LDC);
+double i3[3][3] = {
+	{1.0, 0.0, 0.0},
+	{0.0, 1.0, 0.0},
+	{0.0, 0.0, 1.0}
+};
 
-// Find the inverse of a matrix.
-// A is a vectorized matrix, whose original size is N by N.
-void Inverse(int N, double* A) {
-	int IPIV[N];
-    int LWORK = 2*N;
-    double WORK[LWORK];
-    int INFO;
-
-    DGETRF_(&N,&N,A,&N,IPIV,&INFO);
-    DGETRI_(&N,A,&N,IPIV,WORK,&LWORK,&INFO);
-}
-
+double i2[2][2] = {
+	{1.0, 0.0},
+	{0.0, 1.0}
+};
 
 // Find the cross product of two vectors.
 void Cross3d(double a[3], double b[3], double c[3]) {
@@ -28,8 +20,7 @@ void Cross3d(double a[3], double b[3], double c[3]) {
 
 // Determinant of 2X2 or 3X3 matrix
 double Determinant(const int n, double a[n][n]) {
-	// Assuming a[n][n]
-	double det;
+	double det = 0.0;
 	if (n == 2) {
 		det = a[0][0]*a[1][1] - a[0][1]*a[1][0];
 	} else if (n == 3) {
@@ -39,95 +30,24 @@ double Determinant(const int n, double a[n][n]) {
 	return det;
 }
 
-// Calculates C = alpha*A*B + beta*C
-// A[m][k] B[k][n] C[m][n] are originally 2d row-major matrices
-void MatMul(char transa, char transb, int m, int n, int k, double alpha, double beta, double* A, double* B, double* C){
-	int lda, ldb, ldc;
-	int i, j, pos1, pos2;
-	int ka, kb;
-
-	ldc = 2*m;
-
-	if (transa == 'N') {
-		lda = 2*m;
-		ka = k;
-	} else if (transa == 'T') {
-		lda = 2*k;
-		ka = m;
-	}
-
-	if (transb == 'N') {
-		ldb = 2*k;
-		kb = n;
-	} else if (transb == 'T') {
-		ldb = 2*n;
-		kb = k;
-	}
-
-	double OA[lda*ka], OB[ldb*kb], OC[ldc*n];
-
-	if (transa == 'N') {
-		// A is m by k
-		// Change order because of C/FORTRAN difference
-		for (i = 0; i < m; ++i) {
-			for (j = 0; j < k; ++j) {
-				pos1 = k*i + j;
-				pos2 = lda*j + i;
-				OA[pos2] = A[pos1];
-			}
-		}
-	} else if (transa == 'T') {
-		// A is k by m
-		// Do not change
-		for (i = 0; i < k; ++i) {
-			for (j = 0; j < m; ++j) {
-				pos1 = m*i + j;
-				pos2 = lda*j + i;
-				OA[pos2] = A[pos1];
-			}
-		}
-	}
-
-	if (transb == 'N') {
-		// B is k by n
-		for (i = 0; i < k; ++i) {
-			for (j = 0; j < n; ++j) {
-				pos1 = n*i + j;
-				pos2 = ldb*j + i;
-				OB[pos2] = B[pos1];
-			}
-		}
-	} else if (transb == 'T') {
-		// B is n by k
-		for (i = 0; i < n; ++i) {
-			for (j = 0; j < k; ++j) {
-				pos1 = k*i + j;
-				pos2 = ldb*j + i;
-				OB[pos2] = B[pos1];
-			}
-		}
-	}
-
-	if (fabs(beta) > 1e-5) {
-		for (i = 0; i < m; ++i) {
-			for (j = 0; j < n; ++j) {
-				pos1 = n*i + j;
-				pos2 = ldc*j + i;
-				OC[pos2] = C[pos1];
-			}
-		}
-	}
-	
-
-	DGEMM_(&transa, &transb, &m, &n, &k, &alpha, OA, &lda, OB, &ldb, &beta, OC, &ldc);
-
-	// Change the result to row-major
-	for (i = 0; i < m; ++i) {
-		for (j = 0; j < n; ++j) {
-			pos1 = n*i + j;
-			pos2 = ldc*j + i;
-			C[pos1] = OC[pos2];
-		}
+// Invert a 2d or 3d square matrix using direct method
+void InvertDirect(const int n, double A[n][n], double B[n][n]) {
+	double det = Determinant(n, A);
+	if (n == 2) {
+		B[0][0] =  A[1][1]/det;
+		B[0][1] = -A[0][1]/det;
+		B[1][0] = -A[1][0]/det;
+		B[1][1] =  A[0][0]/det;
+	} else if (n == 3) {
+		B[0][0] = (A[1][1]*A[2][2] - A[1][2]*A[2][1])/det;
+		B[0][1] = (A[0][2]*A[2][1] - A[0][1]*A[2][2])/det;
+		B[0][2] = (A[0][1]*A[1][2] - A[0][2]*A[1][1])/det;
+		B[1][0] = (A[1][2]*A[2][0] - A[1][0]*A[2][2])/det;
+		B[1][1] = (A[0][0]*A[2][2] - A[0][2]*A[2][0])/det;
+		B[1][2] = (A[0][2]*A[1][0] - A[0][0]*A[1][2])/det;
+		B[2][0] = (A[1][0]*A[2][1] - A[1][1]*A[2][0])/det;
+		B[2][1] = (A[0][1]*A[2][0] - A[0][0]*A[2][1])/det;
+		B[2][2] = (A[0][0]*A[1][1] - A[0][1]*A[1][0])/det;
 	}
 }
 
@@ -140,3 +60,95 @@ double DotProduct(const int n, double a[n], double b[n]) {
 	}
 	return result;
 }
+
+// v = alpha * v
+void VecScale_(const int alpha, const int n, double v[n]) {
+	int i;
+	for (i = 0; i < n; ++i) {
+		v[i] = alpha*v[i];
+	}
+}
+// B = alpha * A
+void MatScale_(const int alpha, const int m, const int n, double A[m][n]) {
+	int i, j;
+	for (i = 0; i < m; ++i) {
+		for (j = 0; j < n; ++j) {
+			A[i][j] *= alpha;
+		}
+	}
+}
+
+// b = A * x
+void MatMult_(const int m, const int n, double A[m][n], double x[n], double b[m]) {
+	int i, j;
+	for (i = 0; i < m; ++i) {
+		b[i] = 0.0;
+		for (j = 0; j < n; ++j) {
+			b[i] += A[i][j]*x[j];
+		}
+	}
+}
+
+// b = A^T * x
+void MatMultTranspose_(const int m, const int n, double A[m][n], double x[m], double b[n]) {
+	int i, j;
+	for (i = 0; i < n; ++i) {
+		b[i] = 0.0;
+		for (j = 0; j < m; ++j) {
+			b[i] += A[j][i]*x[j];
+		}
+	}
+}
+
+// C = A * B
+void MatMatMult_(const int m, const int k, const int n, \
+	double A[m][k], double B[k][n], double C[m][n]) {
+	int i, j, p;
+	for (i = 0; i < m; ++i) {
+		for (j = 0; j < n; ++j) {
+			C[i][j] = 0.0;
+			for (p = 0; p < k; ++p) {
+				C[i][j] += A[i][p]*B[p][j];
+			}
+		}
+	}
+}
+
+// C = A^T * B
+void MatTransposeMatMult_(const int m, const int k, const int n, \
+	double A[k][m], double B[k][n], double C[m][n]) {
+	int i, j, p;
+	for (i = 0; i < m; ++i) {
+		for (j = 0; j < n; ++j) {
+			C[i][j] = 0.0;
+			for (p = 0; p < k; ++p) {
+				C[i][j] += A[p][i]*B[p][j];
+			}
+		}
+	}
+}
+
+// C = A * B^T
+void MatMatTransposeMult_(const int m, const int k, const int n, \
+	double A[m][k], double B[n][k], double C[m][n]) {
+	int i, j, p;
+	for (i = 0; i < m; ++i) {
+		for (j = 0; j < n; ++ j) {
+			C[i][j] = 0.0;
+			for (p = 0; p < k; ++p) {
+				C[i][j] += A[i][p]*B[j][p];
+			}
+		}
+	}
+}
+
+// C = A + B
+void MatMatAdd_(const int m, const int n, double A[m][n], double B[m][n], double C[m][n]) {
+	int i, j;
+	for (i = 0; i < m; ++i) {
+		for (j = 0; j < n; ++j) {
+			C[i][j] = A[i][j] + B[i][j];
+		}
+	}
+}
+

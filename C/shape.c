@@ -1,6 +1,5 @@
 #include "shape.h"
 
-
 void ShapeFun(const int nsd, double xi[nsd], const int nen, double p[nen]) {
     // The shape function
     if (nsd == 1) {
@@ -37,7 +36,6 @@ void ShapeFun(const int nsd, double xi[nsd], const int nen, double p[nen]) {
         }
     }
 }
-
 
 void ShapeDer(const int nsd, double xi[nsd], const int nen, double p[nen][nsd]) {
     // The derivative of the shape function

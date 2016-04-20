@@ -1,21 +1,19 @@
-LIBS = /usr/local/lib/liblapack.a  /usr/local/lib/libblas.a /usr/local/lib/libmetis.a /usr/local/lib/libma57.a
-OBJECTS = read.o helpers.o face.o integration.o shape.o material.o internal_force.o \
-		  external_force.o tangent_stiffness.o symmetric_solver.o main.o
-FC = gfortran
+OBJECTS = global_variables.o read.o shape.o face.o integration.o helpers.o \
+		  external_force.o internal_force.o tangent_stiffness.o material.o main.o
 CC = gcc
-CPP = g++
+
+include ${PETSC_DIR}/lib/petsc/conf/variables
+include ${PETSC_DIR}/lib/petsc/conf/rules
 
 main: $(OBJECTS)
-	$(FC) -o main $(OBJECTS) $(LIBS)
-
-read.o: read.cpp
-	$(CPP) -c read.cpp
-
-symmetric_solver.o: symmetric_solver.f90
-	$(FC) -c symmetric_solver.f90
+	-${CLINKER} -o main $^ ${PETSC_KSP_LIB}
 
 %.o: %.c
-	$(CC) -c $<
+	$(PETSC_COMPILE) -c -g $<
 
-clean:
+myclean:
 	rm -f *.o main
+
+# $< = first input
+# $^ = inputs
+# $@ = outputs

@@ -1,10 +1,9 @@
-#include "integration.h"
 #include <math.h>
-
+#include "integration.h"
 
 int IntNum(const int nsd, const int nen, const int isreduced) {
     // The number of integration points in an element
-    int n;
+    int n = 0;
     if (!isreduced) {
         if (nsd == 1) {
             if (nen == 2) {
@@ -31,7 +30,7 @@ int IntNum(const int nsd, const int nen, const int isreduced) {
         } else if (nsd == 2) {
             if (nen == 3) {
                 n = 1;
-            } else if (nen == 3) {
+            } else if (nen == 4) {
                 n = 1;
             }
         } else if (nsd == 3) {
@@ -44,7 +43,6 @@ int IntNum(const int nsd, const int nen, const int isreduced) {
     }
     return n;
 }
-
 
 void IntWeights(const int nsd, const int nen, const int npt, double p[npt]) {
     // The weights of integration points
@@ -90,7 +88,6 @@ void IntWeights(const int nsd, const int nen, const int npt, double p[npt]) {
     }
 }
 
-
 void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) {
     // The coordinates of the integration points
     int i, j;
@@ -103,7 +100,7 @@ void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) 
     if (nsd == 1) {
         if (npt == 2) {
             p[0][0] = -temp;
-            p[1][0] = temp;
+            p[1][0] =  temp;
         }
     } else if (nsd == 2) {
         if (nen == 3) {
@@ -118,12 +115,12 @@ void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) 
             } else if (npt == 4) {
                 p[0][0] = -temp;
                 p[0][1] = -temp;
-                p[1][0] = temp;
+                p[1][0] =  temp;
                 p[1][1] = -temp;
                 p[2][0] = -temp;
-                p[2][1] = temp;
-                p[3][0] = temp;
-                p[3][1] = temp;
+                p[2][1] =  temp;
+                p[3][0] =  temp;
+                p[3][1] =  temp;
             }
         }
     } else if (nsd == 3) {
@@ -139,30 +136,30 @@ void IntPoints(const int nsd, const int nen, const int npt, double p[npt][nsd]) 
                 p[0][1] = 0.0;
                 p[0][2] = 0.0;
             } else if (npt == 8) {
-                p[0][0] = -1.0;
-                p[0][1] = -1.0;
-                p[0][2] = -1.0;
-                p[1][0] = 1.0;
-                p[1][1] = -1.0;
-                p[1][2] = -1.0;
-                p[2][0] = 1.0;
-                p[2][1] = 1.0;
-                p[2][2] = -1.0;
-                p[3][0] = -1.0;
-                p[3][1] = 1.0;
-                p[3][2] = -1.0;
-                p[4][0] = -1.0;
-                p[4][1] = -1.0;
-                p[4][2] = 1.0;
-                p[5][0] = 1.0;
-                p[5][1] = -1.0;
-                p[5][2] = 1.0;
-                p[6][0] = 1.0;
-                p[6][1] = 1.0;
-                p[6][2] = 1.0;
-                p[7][0] = -1.0;
-                p[7][1] = 1.0;
-                p[7][2] = 1.0;
+                p[0][0] = -temp;
+                p[0][1] = -temp;
+                p[0][2] = -temp;
+                p[1][0] =  temp;
+                p[1][1] = -temp;
+                p[1][2] = -temp;
+                p[2][0] =  temp;
+                p[2][1] =  temp;
+                p[2][2] = -temp;
+                p[3][0] = -temp;
+                p[3][1] =  temp;
+                p[3][2] = -temp;
+                p[4][0] = -temp;
+                p[4][1] = -temp;
+                p[4][2] =  temp;
+                p[5][0] =  temp;
+                p[5][1] = -temp;
+                p[5][2] =  temp;
+                p[6][0] =  temp;
+                p[6][1] =  temp;
+                p[6][2] =  temp;
+                p[7][0] = -temp;
+                p[7][1] =  temp;
+                p[7][2] =  temp;
             }
         }
     }

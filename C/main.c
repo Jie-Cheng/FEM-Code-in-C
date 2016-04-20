@@ -1,150 +1,160 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
+#include <petscksp.h>
+#include "global_variables.h"
 #include "read.h"
-#include "helpers.h"
-#include "material.h"
 #include "internal_force.h"
 #include "external_force.h"
 #include "tangent_stiffness.h"
 
-void Statics(int maxit, int isbinary, double inistep, double adjust, double tol, \
-	double penalty, int materialtype, double materialprops[5], double gravity[3], \
-	int nsd, int nen, int nn, int nel, double coords[nn][nsd], \
-	int connect[nel][nen], int bc_size, int bc_num[bc_size][2], double bc_val[bc_size], \
-	int load_size, int load_type, int load_num[load_size][2], \
-	double load_val[load_size][load_type], int share[nn]);
+int Statics();
 
-extern void ReadInput();
-extern void ReadMesh();
-extern void ma57ds_(int* ndofs, double A[*ndofs][*ndofs], double b[*ndofs], double x[*ndofs]);
-
-int main() {
+int main(int argc,char* argv[]) {
 	// Initialization
-	int mode, maxit, nsteps, nprint, isbinary;
-	int nsd, nen, nn, nel, materialtype, bc_size, load_size, load_type;
-	double inistep, adjust, tol, dt, damp, penalty;
-	double materialprops[5], gravity[3];
-    ReadInput(&mode, &maxit, &nsteps, &nprint, &isbinary, &inistep, &adjust, &tol, &dt, \
-    	&damp, &penalty, &materialtype, materialprops, gravity);
-    double coords[nn][nsd];
-    int connect[nel][nen];
-    int bc_num[bc_size][2];
-    double bc_val[bc_size];
-    int load_num[load_size][2];
-    double load_val[load_size][load_type];
-    int share[nn];
-    ReadMesh(&nsd, &nn, &nel, &nen, coords, connect, &bc_size, bc_num, bc_val, &load_size, &load_type, \
-    	load_num, load_val, share);
+	ReadInput();
+	ReadMesh();
+	Echo();
+	CountNonzerosInSerial();
 
-    // Echo the inputs
-    printf("mode = %d\n", mode);
-    printf("isbinary = %d\n", isbinary);
-    printf("tol = %12.4e\n", tol);
-    printf("penalty = %12.4e\n", penalty);
-    printf("maxit = %d\n", maxit);
-    printf("gravity = [%12.4e %12.4e %12.4e]\n", gravity[0], gravity[1], gravity[2]);
-    printf("inistep = %12.4e\n", inistep);
-    printf("adjust = %12.4e\n", adjust);
-    printf("nsteps = %d\n", nsteps);
-    printf("dt = %12.4e\n", dt);
-    printf("nprint = %d\n", nprint);
-    printf("damp = %12.4e\n", damp);
-    printf("materialtype = %d\n", materialtype);
-    printf("materialprops =[%12.4e %12.4e %12.4e %12.4e %12.4e]\n", \
-     materialprops[0], materialprops[1], materialprops[2], materialprops[3], materialprops[4]);
-    printf("nsd = %d\n", nsd);
-    printf("nn = %d\n", nn);
-    printf("nel = %d\n", nel);
-    printf("nen = %d\n", nen);
-    printf("bc_size = %d\n", bc_size);
-	printf("load_size = %d\n", load_size);
-	printf("load_type = %d\n", load_type);
+	PetscErrorCode ierr;
+	PetscMPIInt mycomm;
 
-    if (mode == 0) {
-    	Statics(maxit, isbinary, inistep, adjust, tol, penalty, materialtype, materialprops, gravity, \
-    		nsd, nen, nn, nel, coords, connect, bc_size, bc_num, bc_val, load_size, load_type, \
-    		load_num, load_val, share);
-    }
+	PetscInitialize(&argc, &argv, (char*)0, (char*)0);
+	ierr = MPI_Comm_size(PETSC_COMM_WORLD, &mycomm); CHKERRQ(ierr);
+	if (mycomm != 1) 
+		SETERRQ(PETSC_COMM_WORLD, 1, "For now this program can only run in serial!");
+	Statics();
 
+	
+
+	ierr = PetscFinalize();
+
+	int i;
+	for (i = 0; i < nn; ++i) free(coords[i]);
+	free(coords);
+	for (i = 0; i < nel; ++i) free(connect[i]);
+	free(connect);
+	for (i = 0; i < bc_size; ++i) free(bc_num[i]);
+	free(bc_num);
+	free(bc_val);
+	for (i = 0; i < load_size; ++i) {
+		free(load_num[i]);
+		free(load_val[i]);
+	}
+	free(load_num);
+	free(load_val);
+	free(share);
+	
     return 0;
 }
 
 
-void Statics(int maxit, int isbinary, double inistep, double adjust, double tol, \
-	double penalty, int materialtype, double materialprops[5], double gravity[3], \
-	int nsd, int nen, int nn, int nel, double coords[nn][nsd], \
-	int connect[nel][nen], int bc_size, int bc_num[bc_size][2], double bc_val[bc_size], \
-	int load_size, int load_type, int load_num[load_size][2], \
-	double load_val[load_size][load_type], int share[nn]) {
+int Statics() {
+	int ndofs = nn*nsd + nel;
+	
+	PetscErrorCode ierr;
+	Vec Fint, Fext, R, w, w1, dw;
+	Mat A;
+	ierr = VecCreate(PETSC_COMM_WORLD, &Fint); CHKERRQ(ierr);
+	ierr = VecSetSizes(Fint, PETSC_DECIDE, ndofs); CHKERRQ(ierr);
+	ierr = VecSetFromOptions(Fint); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &Fext); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &R); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &w); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &w1); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &dw); CHKERRQ(ierr);
+	ierr = MatCreateSeqAIJ(PETSC_COMM_WORLD, ndofs, ndofs, PETSC_DEFAULT, nnz, &A); CHKERRQ(ierr);
+	//ierr = MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, ndofs, ndofs); CHKERRQ(ierr);
+	//ierr = MatSetUp(A);CHKERRQ(ierr);
+	KSP ksp; // Linear solver context
+	PC pc; // Preconditioner context
+	//PetscReal tolorance = 1.0e-14;
+	double constraint = 0.0;
+	int i, row, gmres_nit;
 
-	double Fint[nn*nsd+nel];
-	double Fext[nn*nsd+nel];
-	double R[nn*nsd+nel];
-	double w[nn*nsd+nel];
-	double w1[nn*nsd+nel];
-	double dw[nn*nsd+nel];
-	double A[nn*nsd+nel][nn*nsd+nel];
+	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp); CHKERRQ(ierr);
+	ierr = VecSet(w, 0.0); CHKERRQ(ierr);
+	ierr = VecSet(w1, 0.0); CHKERRQ(ierr);
+	ierr = VecSet(dw, 0.0); CHKERRQ(ierr);
+	ierr = VecSet(Fint, 0.0); CHKERRQ(ierr);
+	ierr = VecSet(Fext, 0.0); CHKERRQ(ierr);
+	ierr = VecSet(R, 0.0); CHKERRQ(ierr);
 
-	double constraint[bc_size];
-	double der_constraint[bc_size][nn*nsd];
-
-	int i, j, row, col;
-	for (i = 0; i < nn*nsd+nel; ++i) w[i] = 0.0;
-	for (i = 0; i < bc_size; ++i) {
-		constraint[i] = 0.0;
-		for (j = 0; j < nn*nsd; ++j) {
-			der_constraint[i][j] = 0.0;
-		}
-	}
-
+	nprint = 1;
+	nsteps = 1;
+	dt = 1.;
+	step = 0;
 	double load_factor = 0.0;
 	double increment = inistep;
-	int step = 0;
+	
 	// output
 
-	if (load_type != 1) // Traction
-		ExternalTraction(nsd, nn, nel, nen, coords, connect, load_size, load_num, load_type, load_val, Fext);
+	if (load_type != 1) ExternalTraction(&Fext); // Traction
 
 	while (load_factor < 1.0) {
 		step++;
-		if (load_factor + increment > 1.0) {
-			increment = 1.0 - load_factor;
-		}
-		for (i = 0; i < nn*nsd+nel; ++i) w1[i] = w[i];
+		if (load_factor + increment > 1.0) increment = 1.0 - load_factor;
+		load_factor += increment;
+		ierr = VecCopy(w1, w); CHKERRQ(ierr);
 		double err1 = 1.0;
 		double err2 = 1.0;
 		int nit = 0;
-		printf("Step = %8d, LoadFactor = %12.4e\n", step, load_factor);
+		printf("Step = %4d, LoadFactor = %12.4e\n", step, load_factor);
 		while ((err1 > tol || err2 > tol) && nit < maxit) {
 			nit++;
-			InternalForce(nsd, nn, nel, nen, w, coords, connect, materialtype, materialprops, Fint);
-			if (load_type == 1) // Pressure
-				ExternalPressure(nsd, nn, nel, nen, w, coords, connect, load_size, load_num, load_type, load_val, Fext);
-			InternalTangent(nsd, nn, nel, nen, w, coords, connect, materialtype, materialprops, A);
-			// R = Fint - load_factor*Fext
-			for (i = 0; i < nn*nsd+nel; ++i) {
-				R[i] = Fint[i] - load_factor*Fext[i];
-			} 
+			InternalForce(&w, &Fint);
+			if (load_type == 1) ExternalPressure(&w, &Fext); // pressure load
+			InternalTangent(&w, &A);
+			//ierr = MatView(A, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+			// R =  Fint - load_factor*Fext
+			ierr = VecCopy(Fext, R); CHKERRQ(ierr);
+			ierr = VecAYPX(R, -load_factor, Fint); CHKERRQ(ierr);
 			for (i = 0; i < bc_size; ++i) {
 				row = nsd*(bc_num[i][0] - 1) + bc_num[i][1] - 1;
-				constraint[i] = w[row] - bc_val[i];
-				der_constraint[i][row] = 1.0;
-				A[row][row] += penalty*der_constraint[i][row]*der_constraint[i][row];
-				R[row] += penalty*der_constraint[i][row]*constraint[i];
+				ierr = VecGetValues(w, 1, &row, &constraint); CHKERRQ(ierr);
+				constraint -= bc_val[i];
+				ierr = MatSetValue(A, row, row, penalty, ADD_VALUES); CHKERRQ(ierr);
+				ierr = VecSetValue(R, row, penalty*constraint, ADD_VALUES); CHKERRQ(ierr);
 			}
-			// MA57DS(nn*nsd+nel, A, -R, dw)
-			for (i = 0; i < nn*nsd+nel; ++i) {
-				R[i] = -R[i];
-			}
-			int n = nn*nsd + nel;
-			ma57ds_(&n, A, R, dw);
-			for (i = 0; i < nn*nsd+nel; ++i) w[i] += dw[i];
-			err1 = sqrt(DotProduct(nn*nsd+nel, dw, dw)/DotProduct(nn*nsd+nel, w, w));
-			err2 = sqrt(DotProduct(nn*nsd+nel, R, R)/(nsd*nn+nel));
-			printf("Iteration = %8d     Err1 = %12.4e,     Err2 = %12.4e\n", nit, err1, err2);
+			ierr = MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+			ierr = MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+			ierr = VecAssemblyBegin(R); CHKERRQ(ierr);
+			ierr = VecAssemblyEnd(R); CHKERRQ(ierr);
+			ierr = VecScale(R, -1.0); CHKERRQ(ierr);
+
+			ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
+			ierr = KSPGetPC(ksp, &pc); CHKERRQ(ierr);
+			ierr = PCSetType(pc, PCASM); CHKERRQ(ierr);
+			ierr = KSPSetTolerances(ksp, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT); CHKERRQ(ierr);
+			ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+
+			printf("Begin to solve:\n");
+			ierr = KSPSolve(ksp, R, dw); CHKERRQ(ierr);
+			
+			KSPConvergedReason reason;
+			ierr = KSPGetConvergedReason(ksp, &reason); CHKERRQ(ierr);
+			printf("REASON: %d\n", reason);
+
+			ierr = KSPGetIterationNumber(ksp, &gmres_nit); CHKERRQ(ierr);
+			ierr = VecAYPX(w, 1.0, dw); CHKERRQ(ierr);
+
+			double temp;
+			//ierr = VecView(dw, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+			ierr = VecDot(dw, dw, &err1); CHKERRQ(ierr);
+			ierr = VecDot(w, w, &temp); CHKERRQ(ierr);
+			err1 = sqrt(err1/temp);
+			ierr = VecDot(R, R, &err2); CHKERRQ(ierr);
+			err2 = sqrt(err2)/ndofs;
+			
+			printf("Iteration = %4d     GMRES_Iteration = %4d     Err1 = %12.4e,     Err2 = %12.4e\n",\
+				nit, gmres_nit, err1, err2);
+
 		}
 		if (nit == maxit) {
-			for (i = 0; i < nn*nsd+nel; ++i) w[i] = w1[i];
+			break;
+			ierr = VecZeroEntries(w); CHKERRQ(ierr);
+			ierr = VecCopy(w, w1); CHKERRQ(ierr);
 			load_factor = load_factor - increment;
 			increment /= 2.;
 		} else if (nit > 6) {
@@ -153,5 +163,19 @@ void Statics(int maxit, int isbinary, double inistep, double adjust, double tol,
 			increment *= (1.0 + adjust);
 		}
 	}
+	step = nprint;
+
+	//ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+
+	ierr = VecDestroy(&Fint); CHKERRQ(ierr);
+	ierr = VecDestroy(&Fext); CHKERRQ(ierr);
+	ierr = VecDestroy(&R); CHKERRQ(ierr);
+	ierr = VecDestroy(&w); CHKERRQ(ierr);
+	ierr = VecDestroy(&w1); CHKERRQ(ierr);
+	ierr = VecDestroy(&dw); CHKERRQ(ierr);
+	ierr = MatDestroy(&A); CHKERRQ(ierr);
+	ierr = KSPDestroy(&ksp); CHKERRQ(ierr);
+
 	// output
+	return 0;
 }

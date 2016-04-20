@@ -1,18 +1,19 @@
 #include <math.h>
+#include <petsc.h>
+#include "global_variables.h"
 #include "internal_force.h"
 #include "helpers.h"
 #include "shape.h"
 #include "integration.h"
 #include "material.h"
 
-void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
-	double coords[nn][nsd], int connect[nel][nen], int materialtype, \
-	double materialprops[5], double fglo[nn*nsd+nel]) {
 
-	int i, j, k, l, ele, row;
+int InternalForce(Vec* dofs, Vec* fglo) {
+	PetscErrorCode ierr;
+	int i, j, l, ele, row, intpt;
 	double kappa = materialprops[1];
-
-	for (i = 0; i < nn*nsd+nel; ++i) fglo[i] = 0.;
+	// Initialize
+	ierr = VecZeroEntries(*fglo); CHKERRQ(ierr);
 
 	int npt = IntNum(nsd, nen, 0); // Number of integration points
 	double xilist[npt][nsd]; // Natural coordinates of the integration points
@@ -31,51 +32,54 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 		for (i = 0; i < nen; ++i) {
 			for (j = 0; j < nsd; ++j) {
 				elecoord[i][j] = coords[connect[ele][i]-1][j];
-				eledof[i][j] = dofs[nsd*(connect[ele][i]-1)+j];
+				int id = nsd*(connect[ele][i]-1)+j;
+				ierr = VecGetValues(*dofs, 1, &id, &eledof[i][j]); CHKERRQ(ierr);
+				//eledof[i][j] = dofs[nsd*(connect[ele][i]-1)+j];
 			}
 		}
-		pressure = dofs[nsd*nn+ele];
+		int id = nsd*nn + ele;
+		ierr = VecGetValues(*dofs, 1, &id, &pressure); CHKERRQ(ierr);
+		//pressure = dofs[nsd*nn+ele];
 		for (i = 0; i < nen*nsd+1; ++i) fele[i] = 0.;
 		// Loop over the integration points
-		int intpt;
 		for (intpt = 0; intpt < npt; ++intpt) {
 			double N[nen]; // The nodal values of the shape functions
 			ShapeFun(nsd, xilist[intpt], nen, N);
 			double intcoord[nsd];
-			MatMul('T', 'N', nsd, 1, nen, 1.0, 0.0, elecoord[0], N, intcoord); // MatMulVec(elecoord^T, N)
+			MatMultTranspose_(nen, nsd, elecoord, N, intcoord); // elecoord^T * N
 			double dNdxi[nen][nsd];
 			ShapeDer(nsd, xilist[intpt], nen, dNdxi);
 			double dxdxi[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, elecoord[0], dNdxi[0], dxdxi[0]); // MatMulMat(elecoord^T, dNdxi)
+			MatTransposeMatMult_(nsd, nen, nsd, elecoord, dNdxi, dxdxi); // elecoord^T * dNdxi
 			double det = Determinant(nsd, dxdxi);
 			double dxidx[nsd][nsd];
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					dxidx[i][j] = dxdxi[i][j];
-				}
-			}
-			Inverse(nsd, dxidx[0]);
+			InvertDirect(nsd, dxdxi, dxidx);
 			double dNdx[nen][nsd];
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdxi[0], dxidx[0], dNdx[0]); // MatMulMat(dNdxi, dxidx)
+			MatMatMult_(nen, nsd, nsd, dNdxi, dxidx, dNdx); // dNdxi * dxidx
 			double F[nsd][nsd];
-			MatMul('T', 'N', nsd, nsd, nen, 1.0, 0.0, eledof[0], dNdx[0], F[0]); // eye + MatMul(eledof^T, dNdx)
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					F[i][j] += 1.0;
-				}
-			}
+			MatTransposeMatMult_(nsd, nen, nsd, eledof, dNdx, F); // I + eledof^T * dNdx
+			MatMatAdd_(nsd, nsd, F, i3, F);
 			double J = Determinant(nsd, F);
 			double stress[nsd][nsd];
-			KirchhoffStress(nsd, intcoord, F, pressure, materialtype, materialprops, stress);
+			KirchhoffStress(intcoord, F, pressure, stress);
 			double Finv[nsd][nsd];
+			InvertDirect(nsd, F, Finv);
+			double dNdy[nen][nsd];
+			MatMatMult_(nen, nsd, nsd, dNdx, Finv, dNdy); // dNdx * Finv
+			/*
+			printf("intcoord:\n");
+			for (i = 0; i < nsd; ++i) printf("%12.4e ", intcoord[i]);
+			printf("\n");
+			printf("F:\n");
 			for (i = 0; i < nsd; ++i) {
 				for (j = 0; j < nsd; ++j) {
-					Finv[i][j] = F[i][j];
+					printf("%12.4e ", F[i][j]);
 				}
+				printf("\n");
 			}
-			Inverse(nsd, Finv[0]);
-			double dNdy[nen][nsd]; 
-			MatMul('N', 'N', nen, nsd, nsd, 1.0, 0.0, dNdx[0], Finv[0], dNdy[0]); // MatMul(dNdx, Finv)
+			printf("pressure: %12.4e\n", pressure);
+			*/
+			
 			// Element internal force
 			for (l = 0; l < nen; ++l) {
 				for (i = 0; i < nsd; ++i) {
@@ -91,10 +95,15 @@ void InternalForce(int nsd, int nn, int nel, int nen, double dofs[nn*nsd+nel], \
 		for (l = 0; l < nen; ++l) {
 			for (i = 0; i < nsd; ++i) {
 				row = nsd*(connect[ele][l] - 1) + i;
-				fglo[row] += fele[nsd*l + i];
+				ierr = VecSetValue(*fglo, row, fele[nsd*l+i], ADD_VALUES); CHKERRQ(ierr);
+				//fglo[row] += fele[nsd*l + i];
 			}
 		}
 		row = nn*nsd + ele;
-		fglo[row] += fele[nsd*nen];	
-	}	
+		ierr = VecSetValue(*fglo, row, fele[nsd*nen], ADD_VALUES); CHKERRQ(ierr);
+		//fglo[row] += fele[nsd*nen];
+	}
+	ierr = VecAssemblyBegin(*fglo); CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(*fglo); CHKERRQ(ierr);
+	return 0;
 }

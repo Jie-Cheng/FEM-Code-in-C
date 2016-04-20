@@ -69,7 +69,7 @@ contains
 			mu2 = materialprops(4)
 			do i=1,nsd
 				do j=1,nsd
-					stress(i,j) = -1/3.*(mu1*I1+2*mu2*I2)*eye(i,j) - mu2*BB(i,j) + (mu1+mu2*I1)*Bbar(i,j) + Ja*pressure*eye(i,j);
+					stress(i,j) = -(mu1*I1+2*mu2*I2)*eye(i,j)/3. - mu2*BB(i,j) + (mu1+mu2*I1)*Bbar(i,j) + Ja*pressure*eye(i,j);
 				end do
 			end do
 		else if (materialtype == 2) then ! Yeoh
