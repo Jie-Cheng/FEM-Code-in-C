@@ -62,14 +62,14 @@ double DotProduct(const int n, double a[n], double b[n]) {
 }
 
 // v = alpha * v
-void VecScale_(const int alpha, const int n, double v[n]) {
+void VecScale_(const double alpha, const int n, double v[n]) {
 	int i;
 	for (i = 0; i < n; ++i) {
 		v[i] = alpha*v[i];
 	}
 }
 // B = alpha * A
-void MatScale_(const int alpha, const int m, const int n, double A[m][n]) {
+void MatScale_(const double alpha, const int m, const int n, double A[m][n]) {
 	int i, j;
 	for (i = 0; i < m; ++i) {
 		for (j = 0; j < n; ++j) {

@@ -88,6 +88,15 @@ int InternalTangent(Vec* dofs, Mat* kglo) {
 			}
 			kele[nen*nsd][nen*nsd] -= 1/kappa*weights[intpt]*det;
 		}
+		/*
+		for (i = 0; i < 25; ++i) {
+			for (j = 0; j < 25; ++j) {
+				printf("%lf ", kele[i][j]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+		*/
 		// Scatter
 		for (a = 0; a < nen; ++a) {
 			for (i = 0; i < nsd; ++i) {

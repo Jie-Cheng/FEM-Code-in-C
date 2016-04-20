@@ -9,6 +9,7 @@
 #include "tangent_stiffness.h"
 
 int Statics();
+int Debug();
 
 int main(int argc,char* argv[]) {
 	// Initialization
@@ -25,7 +26,7 @@ int main(int argc,char* argv[]) {
 	if (mycomm != 1) 
 		SETERRQ(PETSC_COMM_WORLD, 1, "For now this program can only run in serial!");
 	Statics();
-
+	//Debug();
 	
 
 	ierr = PetscFinalize();
@@ -49,7 +50,6 @@ int main(int argc,char* argv[]) {
     return 0;
 }
 
-
 int Statics() {
 	int ndofs = nn*nsd + nel;
 	
@@ -65,7 +65,7 @@ int Statics() {
 	ierr = VecDuplicate(Fint, &w1); CHKERRQ(ierr);
 	ierr = VecDuplicate(Fint, &dw); CHKERRQ(ierr);
 	ierr = MatCreateSeqAIJ(PETSC_COMM_WORLD, ndofs, ndofs, PETSC_DEFAULT, nnz, &A); CHKERRQ(ierr);
-	//ierr = MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, ndofs, ndofs); CHKERRQ(ierr);
+	//ierr = MatSetType(A, MATSEQSBAIJ); CHKERRQ(ierr);
 	//ierr = MatSetUp(A);CHKERRQ(ierr);
 	KSP ksp; // Linear solver context
 	PC pc; // Preconditioner context
@@ -125,13 +125,12 @@ int Statics() {
 
 			ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
 			ierr = KSPGetPC(ksp, &pc); CHKERRQ(ierr);
-			ierr = PCSetType(pc, PCASM); CHKERRQ(ierr);
-			ierr = KSPSetTolerances(ksp, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT); CHKERRQ(ierr);
+			ierr = PCSetType(pc, PCKSP); CHKERRQ(ierr);
+			ierr = KSPSetTolerances(ksp, 1.e-5, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT); CHKERRQ(ierr);
 			ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
-
-			printf("Begin to solve:\n");
+			printf("Begin to solve\n");
 			ierr = KSPSolve(ksp, R, dw); CHKERRQ(ierr);
-			
+			printf("End of solve\n");
 			KSPConvergedReason reason;
 			ierr = KSPGetConvergedReason(ksp, &reason); CHKERRQ(ierr);
 			printf("REASON: %d\n", reason);
@@ -140,19 +139,19 @@ int Statics() {
 			ierr = VecAYPX(w, 1.0, dw); CHKERRQ(ierr);
 
 			double temp;
-			//ierr = VecView(dw, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+			//ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
 			ierr = VecDot(dw, dw, &err1); CHKERRQ(ierr);
 			ierr = VecDot(w, w, &temp); CHKERRQ(ierr);
 			err1 = sqrt(err1/temp);
 			ierr = VecDot(R, R, &err2); CHKERRQ(ierr);
 			err2 = sqrt(err2)/ndofs;
+			ierr = VecZeroEntries(dw); CHKERRQ(ierr);
 			
 			printf("Iteration = %4d     GMRES_Iteration = %4d     Err1 = %12.4e,     Err2 = %12.4e\n",\
 				nit, gmres_nit, err1, err2);
 
 		}
 		if (nit == maxit) {
-			break;
 			ierr = VecZeroEntries(w); CHKERRQ(ierr);
 			ierr = VecCopy(w, w1); CHKERRQ(ierr);
 			load_factor = load_factor - increment;
@@ -165,7 +164,7 @@ int Statics() {
 	}
 	step = nprint;
 
-	//ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+	ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
 
 	ierr = VecDestroy(&Fint); CHKERRQ(ierr);
 	ierr = VecDestroy(&Fext); CHKERRQ(ierr);
@@ -177,5 +176,49 @@ int Statics() {
 	ierr = KSPDestroy(&ksp); CHKERRQ(ierr);
 
 	// output
+	return 0;
+}
+
+
+int Debug() {
+	int ndofs = nn*nsd + nel;
+	
+	PetscErrorCode ierr;
+	Vec Fint, Fext, R, w, w1, dw;
+	Mat A;
+	ierr = VecCreate(PETSC_COMM_WORLD, &Fint); CHKERRQ(ierr);
+	ierr = VecSetSizes(Fint, PETSC_DECIDE, ndofs); CHKERRQ(ierr);
+	ierr = VecSetFromOptions(Fint); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &Fext); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &R); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &w); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &w1); CHKERRQ(ierr);
+	ierr = VecDuplicate(Fint, &dw); CHKERRQ(ierr);
+	ierr = MatCreateSeqAIJ(PETSC_COMM_WORLD, ndofs, ndofs, PETSC_DEFAULT, nnz, &A); CHKERRQ(ierr);
+
+	int i;
+	int ix[ndofs];
+	double val[ndofs];
+	for (i = 0; i < ndofs; ++i) {
+		ix[i] = i;
+		val[i] = 0.01*i;
+	}
+
+	ierr = VecSetValues(w, ndofs, ix, val, INSERT_VALUES); CHKERRQ(ierr);
+	InternalForce(&w, &Fint);
+	InternalTangent(&w, &A);
+	ExternalPressure(&w, &Fext);
+
+	ierr = VecView(Fint, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+	ierr = VecView(Fext, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+
+
+	ierr = VecDestroy(&Fint); CHKERRQ(ierr);
+	ierr = VecDestroy(&Fext); CHKERRQ(ierr);
+	ierr = VecDestroy(&R); CHKERRQ(ierr);
+	ierr = VecDestroy(&w); CHKERRQ(ierr);
+	ierr = VecDestroy(&w1); CHKERRQ(ierr);
+	ierr = VecDestroy(&dw); CHKERRQ(ierr);
+	ierr = MatDestroy(&A); CHKERRQ(ierr);
 	return 0;
 }

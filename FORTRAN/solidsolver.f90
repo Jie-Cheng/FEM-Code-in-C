@@ -23,6 +23,7 @@ program solidsolver
 	call initial_compress(nn*nsd+nel, no_nonzeros, irn, jcn, map, nonzeros)
 	if (mode == 0) then 
 		call statics(filepath)
+		!call debug()
 	else if (mode == 1) then
 		call dynamics(filepath)
 	end if
@@ -375,3 +376,60 @@ subroutine timestamp ( )
 
   return
 end subroutine timestamp
+
+
+
+
+subroutine debug()
+		
+	use read_file
+	use integration
+	use face
+	use shapefunction
+	use material
+	use externalforce
+	use symmetric_solver
+	use output
+	use internalforce
+	use tangentstiffness
+	
+	implicit none
+	
+	integer :: i, nit, row, col, j, k, pos, ndofs
+	real(8), allocatable, dimension(:) :: Fext, Fint, R, w, w1, dw
+	real(8) :: loadfactor, increment, err1, err2
+	real(8), dimension(bc_size) :: constraint
+	
+	allocate(Fext(nn*nsd+nel))
+	allocate(Fint(nn*nsd+nel))
+	allocate(R(nn*nsd+nel))
+	allocate(w(nn*nsd+nel))
+	allocate(w1(nn*nsd+nel))
+	allocate(dw(nn*nsd+nel))
+	
+	! initialize w
+	w = 0.
+	Fint = 0.
+	Fext = 0.
+	
+	ndofs = nn*nsd+nel
+	do i = 1, ndofs
+		w(i) = (i-1)/100.
+	end do
+	
+	call force_internal(w, Fint)
+	call force_pressure(w, Fext)
+	!call tangent_internal(w)
+	write(*,*) Fint
+	!write(*,*) Fext
+	
+	
+	
+	deallocate(Fext)
+	deallocate(Fint)
+	deallocate(R)
+	deallocate(w)
+	deallocate(w1)
+	deallocate(dw)
+	
+end subroutine debug

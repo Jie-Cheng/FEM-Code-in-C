@@ -157,7 +157,7 @@ contains
 				coord(:,a) = coords(:,connect(nodelist(a),ele))
 			end do
 			do i=1,nsd
-				traction(i) = load_val(i+2, j)
+				traction(i) = load_val(i, j)
 			end do
 			! compute the force on the face
 			f = 0.	

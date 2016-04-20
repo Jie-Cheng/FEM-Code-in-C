@@ -66,20 +66,6 @@ int InternalForce(Vec* dofs, Vec* fglo) {
 			InvertDirect(nsd, F, Finv);
 			double dNdy[nen][nsd];
 			MatMatMult_(nen, nsd, nsd, dNdx, Finv, dNdy); // dNdx * Finv
-			/*
-			printf("intcoord:\n");
-			for (i = 0; i < nsd; ++i) printf("%12.4e ", intcoord[i]);
-			printf("\n");
-			printf("F:\n");
-			for (i = 0; i < nsd; ++i) {
-				for (j = 0; j < nsd; ++j) {
-					printf("%12.4e ", F[i][j]);
-				}
-				printf("\n");
-			}
-			printf("pressure: %12.4e\n", pressure);
-			*/
-			
 			// Element internal force
 			for (l = 0; l < nen; ++l) {
 				for (i = 0; i < nsd; ++i) {

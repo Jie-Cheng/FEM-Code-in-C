@@ -22,10 +22,10 @@ void KirchhoffStress(double intcoord[nsd], double F[nsd][nsd], double pressure, 
 	if (nsd == 2) I1 = pow(J, -2/3.);
 	else if (nsd == 3) I1 = 0.;
 	for (i = 0; i < nsd; ++i) I1 += Bbar[i][i];
-	I2 = pow(I1, 2);
+	I2 = pow(I1, 2.);
 	for (i = 0; i < nsd; ++i) {
 		for (j = 0; j < nsd; ++j) {
-			I2 -= pow(Bbar[i][j], 2);
+			I2 -= pow(Bbar[i][j], 2.);
 		}
 	}
 	if (nsd == 2) I2 -= pow(J, -4/3.);
@@ -38,7 +38,7 @@ void KirchhoffStress(double intcoord[nsd], double F[nsd][nsd], double pressure, 
 		double mu2 = materialprops[3];
 		for (i = 0; i < nsd; ++i) {
 			for (j = 0; j < nsd; ++j) {
-				stress[i][j] = -1/3.*(mu1*I1 + 2*mu2*I2)*DELTA(i,j) - mu2*BB[i][j] + (mu1+mu2*I1)*Bbar[i][j] + J*pressure*DELTA(i,j);
+				stress[i][j] = -(mu1*I1 + 2*mu2*I2)*DELTA(i,j)/3. - mu2*BB[i][j] + (mu1+mu2*I1)*Bbar[i][j] + J*pressure*DELTA(i,j);
 			}
 		}
 	} else if (materialtype == 2) {
