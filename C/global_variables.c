@@ -16,4 +16,5 @@ int load_type; // The number of columns of the load_val, could be 1, 2, 3
 int** load_num = 0;
 double** load_val = 0;
 int* share = 0;
-int* nnz = 0;
+int nnz = 0;
+int* nonzeros = 0;

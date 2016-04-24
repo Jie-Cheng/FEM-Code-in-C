@@ -4,6 +4,5 @@
 void ReadInput();
 void ReadMesh();
 void Echo();
-void CountNonzerosInSerial();
 
 #endif

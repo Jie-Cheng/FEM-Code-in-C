@@ -238,29 +238,3 @@ void Echo() {
 	printf("\n");
 }
 
-void CountNonzerosInSerial() {
-	// nnz[i] denotes the number of nonzero entries in the ith row of the tangent stiffness matrix
-	nnz = (int*)calloc(nsd*nn + nel, sizeof(int));
-	int ele, a, i, b, k, row, col;
-	for (i = 0; i < nsd*nn+nel; ++i) nnz[i] = 0;
-	for (ele = 0; ele < nel; ++ele) {
-		for (a = 0; a < nen; ++a) {
-			for (i = 0; i < nsd; ++i) {
-				row = nsd*(connect[ele][a]-1) + i;
-				for (b = 0; b < nen; ++b) {
-					for (k = 0; k < nsd; ++k) {
-						col = nsd*(connect[ele][b]-1) + k;
-						nnz[row]++;
-					}
-				}
-				col = nsd*nn + ele;
-				nnz[row]++;
-				nnz[col]++;
-			}
-		}
-		row = nn*nsd + ele;
-		col = nn*nsd + ele;
-		nnz[row]++;
-	}
-}
-

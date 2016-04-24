@@ -17,6 +17,7 @@ extern int load_type; // The number of columns of the load_val, could be 1, 2, 3
 extern int** load_num;
 extern double** load_val;
 extern int* share;
-extern int* nnz;
+extern int nnz;
+extern int* nonzeros;
 
 #endif
