@@ -15,9 +15,6 @@ analyze_nonzero_pattern.o: analyze_nonzero_pattern.cpp
 %.o: %.c
 	$(PETSC_COMPILE) -c -g $<
 
-myclean:
-	rm -f *.o main
-
 # $< = first input
 # $^ = inputs
 # $@ = outputs

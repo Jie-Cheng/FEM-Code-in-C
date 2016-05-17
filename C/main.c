@@ -206,41 +206,11 @@ int Debug() {
 	int ndofs = nn*nsd + nel;
 	
 	PetscErrorCode ierr;
-	Vec Fint, Fext, R, w, w1, dw;
-	Mat A;
-	ierr = VecCreate(PETSC_COMM_WORLD, &Fint); CHKERRQ(ierr);
-	ierr = VecSetSizes(Fint, PETSC_DECIDE, ndofs); CHKERRQ(ierr);
-	ierr = VecSetFromOptions(Fint); CHKERRQ(ierr);
-	ierr = VecDuplicate(Fint, &Fext); CHKERRQ(ierr);
-	ierr = VecDuplicate(Fint, &R); CHKERRQ(ierr);
-	ierr = VecDuplicate(Fint, &w); CHKERRQ(ierr);
-	ierr = VecDuplicate(Fint, &w1); CHKERRQ(ierr);
-	ierr = VecDuplicate(Fint, &dw); CHKERRQ(ierr);
-	ierr = MatCreateSeqAIJ(PETSC_COMM_WORLD, ndofs, ndofs, PETSC_DEFAULT, nonzeros, &A); CHKERRQ(ierr);
-
-	int i;
-	int ix[ndofs];
-	double val[ndofs];
-	for (i = 0; i < ndofs; ++i) {
-		ix[i] = i;
-		val[i] = 0.01*i;
-	}
-
-	ierr = VecSetValues(w, ndofs, ix, val, INSERT_VALUES); CHKERRQ(ierr);
-	InternalForce(&w, &Fint);
-	InternalTangent(&w, &A);
-	ExternalPressure(&w, &Fext);
-
-	ierr = VecView(Fint, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
-	ierr = VecView(Fext, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
-
-
-	ierr = VecDestroy(&Fint); CHKERRQ(ierr);
-	ierr = VecDestroy(&Fext); CHKERRQ(ierr);
-	ierr = VecDestroy(&R); CHKERRQ(ierr);
-	ierr = VecDestroy(&w); CHKERRQ(ierr);
-	ierr = VecDestroy(&w1); CHKERRQ(ierr);
-	ierr = VecDestroy(&dw); CHKERRQ(ierr);
+	Mat Adj;
+	int mlocal = nel/2;
+	int n = nel;
+	int ia
+	
 	ierr = MatDestroy(&A); CHKERRQ(ierr);
 	return 0;
 }
