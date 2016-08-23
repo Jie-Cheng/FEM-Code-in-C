@@ -17,13 +17,10 @@ module read_file
 	save
 	
 contains
-	subroutine read_input(unitnum, filename, mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
+	subroutine read_input(mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
 		materialtype, materialprops, gravity, isbinary, penalty)
 						  
 		implicit none
-		
-		integer, intent(in) :: unitnum
-		character(len = *), intent(in) :: filename
 	
 		character(100) :: text
 		character(1) :: flag = ':'
@@ -33,7 +30,7 @@ contains
 		integer, intent(out) :: mode, maxit, nsteps, nprint, isbinary, materialtype
 		real(8), intent(out) :: firststep, adjust, tol, dt, damp, materialprops(5), gravity(3), penalty
 	
-		open(unit = unitnum, file = filename)
+		open(10, file='input.txt')
 		i = 0
 		ios = 0
 		do while (ios == 0)
@@ -140,7 +137,7 @@ contains
 		integer :: no_rows, i, j, k, full_no_nonzeros, row, col
 		integer, allocatable :: full_col_ind(:), full_row_ptr(:), full_row_ind(:)
 		
-		open(unit=42, form='unformatted', access='stream', file='CRS_v1.bin')
+		open(unit=42, form='unformatted', access='stream', file='CRS.bin')
 		read(42) full_no_nonzeros
 	
 		allocate(full_col_ind(full_no_nonzeros))
@@ -234,5 +231,71 @@ contains
 		deallocate(full_row_ind)
 		deallocate(full_row_ptr)
 	end subroutine read_CRS
+	
+	! Add val at (row, col) into a SYMMETRIC matrix
+	subroutine addValueSymmetric(nonzeros, row, col, val)
+		implicit none
+		integer, intent(in) :: row, col
+		real(8), dimension(:) :: nonzeros
+		real(8), intent(in) :: val
+		integer :: i, pos
+		
+		if (col >= row) then
+			pos = 0
+			do i = row_ptr(row), row_ptr(row+1)
+				if (col == col_ind(i)) then
+					pos = i
+					exit
+				end if
+			end do
+			nonzeros(pos) = nonzeros(pos) + val
+		end if
+	end subroutine addValueSymmetric
+	
+	! Set val at (row, col) into a SYMMETRIC matrix
+	subroutine setValueSymmetric(nonzeros, row, col, val)
+		implicit none
+		integer, intent(in) :: row, col
+		real(8), dimension(:) :: nonzeros
+		real(8), intent(in) :: val
+		integer :: i, pos
+		
+		if (col >= row) then
+			pos = 0
+			do i = row_ptr(row), row_ptr(row+1)
+				if (col == col_ind(i)) then
+					pos = i
+					exit
+				end if
+			end do
+			nonzeros(pos) = val
+		end if
+	end subroutine setValueSymmetric
+	
+	! Get val at (row, col)/(col, row) from a SYMMETRIC matrix
+	function getValueSymmetric(nonzeros, row, col)
+		implicit none
+		integer, intent(in) :: row, col
+		real(8), dimension(:) :: nonzeros
+		real(8) :: val, getValueSymmetric
+		integer :: i, pos, rw, cl
+		
+		if (col >= row) then
+			rw = row
+			cl = col
+		else
+			rw = col
+			cl = row
+		end if
+		
+		pos = 0
+		do i = row_ptr(row), row_ptr(row+1)
+			if (col == col_ind(i)) then
+				pos = i
+				exit
+			end if
+		end do
+		getValueSymmetric = nonzeros(pos)
+	end function getValueSymmetric
 	
 end module read_file

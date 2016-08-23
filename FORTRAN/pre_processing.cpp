@@ -77,11 +77,8 @@ void setBcAndLoads();
 void writeFiles();
 void writeCRS_v1(); // The first way to write CRS
 void writeCRS_v2(); // The second way to write CRS
-void test();
 
 int main (int argc, char* argv[]) {
-    test();
-    /*
     std::string filename;
     std::string buffer;
     try
@@ -100,7 +97,6 @@ int main (int argc, char* argv[]) {
     writeFiles();
     writeCRS_v1();
     writeCRS_v2();
-    */
     return 0;
 }
 
@@ -807,7 +803,7 @@ void writeCRS_v1()
     assert(col_ind.size() == no_nonzeros);
     assert(row_ptr[row_ptr.size()-1] == no_nonzeros + 1);
     
-    std::ofstream ofs("CRS_v1.bin");
+    std::ofstream ofs("CRS.bin");
     ofs.write(reinterpret_cast<char*>(&no_nonzeros), sizeof(int));
     ofs.write(reinterpret_cast<char*>(&col_ind[0]), no_nonzeros * sizeof(int));
     int size_row_ptr = nsd*nn + nel + 1;
@@ -874,33 +870,10 @@ void writeCRS_v2()
     int no_nonzeros = data.size();
     
     int size_row_ptr = row_ptr.size();
-    std::ofstream ofs("CRS_v2.bin");
+    std::ofstream ofs("CRS.bin");
     ofs.write(reinterpret_cast<char*>(&no_nonzeros), sizeof(int));
     ofs.write(reinterpret_cast<char*>(&col_ind[0]), no_nonzeros * sizeof(int));
     ofs.write(reinterpret_cast<char*>(&size_row_ptr), sizeof(int));
     ofs.write(reinterpret_cast<char*>(&row_ptr[0]), size_row_ptr * sizeof(int));
     ofs.close();   
-}
-
-void test()
-{
-    std::ifstream ifs("coords.txt");
-    ifs >> nsd >> nn;
-    ifs.close();
-
-    ifs.open("connect.txt");
-    ifs >> nel >> nen;
-    for (int i = 0; i < nel; ++i)
-    {
-        std::vector<int> my_connect;
-        for (int j = 0; j < nen; ++j)
-        {
-            int buffer;
-            ifs >> buffer;
-            my_connect.push_back(buffer);
-        }
-        connect.push_back(my_connect);
-    }
-    ifs.close();
-    writeCRS_v1();
 }

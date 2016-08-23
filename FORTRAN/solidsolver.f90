@@ -12,18 +12,17 @@ program solidsolver
 	
 	character(80) :: filepath
 	integer :: ct, ct_rate, ct_max, ct1
-	real(8) :: time_elapsed  
+	real(8) :: time_elapsed
 	call timestamp()
 	filepath = '/Users/Jie/Documents/SolidResults/'
 	call system_clock(ct,ct_rate,ct_max)
-	call read_input(10, 'input.txt', mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
+	call read_input(mode, maxit, firststep, adjust, nsteps, nprint, tol, dt, damp, &
 		materialtype, materialprops, gravity, isbinary, penalty)
 	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
 	call read_CRS(no_nonzeros, col_ind, row_ind, nonzeros, row_ptr)
 	if (mode == 0) then 
 		call statics(filepath)
-		!call debug()
 	else if (mode == 1) then
 		call dynamics(filepath)
 	end if
@@ -57,7 +56,7 @@ subroutine statics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k, pos, begin, current, flag
+	integer :: i, nit, row, col, j, k, pos
 	real(8), allocatable, dimension(:) :: Fext, Fint, R, w, w1, dw
 	real(8) :: loadfactor, increment, err1, err2
 	real(8), dimension(bc_size) :: constraint
@@ -73,7 +72,6 @@ subroutine statics(filepath)
 	! initialize w
 	w = 0.
 	constraint = 0.
-	flag = 0
 	
 	nprint = 1
 	nsteps = 1
@@ -100,25 +98,21 @@ subroutine statics(filepath)
 		nit = 0
 		write(*,'(A, A, i5, 5x, A, e12.4, A)') repeat('=', 30), 'Step', step, 'Load', loadfactor, repeat('=', 36)
 		do while (((err1 > tol) .or. (err2 > tol)) .and. (nit < maxit))
-			flag = flag + 1
 			nit = nit + 1
 			call force_internal(w, Fint)
 			! If the external load is pressure, update the external force
 			if (load_type == 1) then
 				call force_pressure(w, Fext)
-			end if
-			call tangent_internal(w)
+			end if	
+			call tangent_internal(w)	
 			R = Fint - loadfactor*Fext
 			! penalty
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				begin = row_ptr(row)
-				current = begin + row - col_ind(begin)
-				nonzeros(current) = nonzeros(current) + penalty
+				call addValueSymmetric(nonzeros, row, row, penalty)
 				R(row) = R(row) + penalty*constraint(i)
 			end do
-			call test(flag)
 			! Solve
 			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)
 			w = w + dw
@@ -150,20 +144,6 @@ subroutine statics(filepath)
 	
 end subroutine statics
 
-subroutine test(flag)
-	use read_file, only: no_nonzeros, nonzeros, row_ind, col_ind
-	implicit none
-	integer, intent(in) :: flag
-	integer :: i
-	if (flag == 1) then
-		open(unit=42, file='CRS_pattern.txt', form='formatted')
-		write(42, '(i8)') no_nonzeros
-		do i = 1, no_nonzeros
-			write(42, '(i8, i8, e15.3)'), row_ind(i), col_ind(i), nonzeros(i)
-		end do
-	end if
-end subroutine test
-
 subroutine dynamics(filepath)
 		
 	use read_file
@@ -180,7 +160,7 @@ subroutine dynamics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k, begin, current
+	integer :: i, nit, row, col, j, k, pos
 	real(8), allocatable, dimension(:) :: Fext, Fint, F, R, un, un1, vn, vn1, an, an1, w, dw, mass_nonzeros
 	real(8) :: loadfactor, increment, err1, err2, gamma, beta
 	real(8), dimension(bc_size) :: constraint
@@ -230,17 +210,9 @@ subroutine dynamics(filepath)
 	do i = 1, bc_size
 		row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 		do col = 1, nn*nsd
-			if (col >= row) then
-				begin = row_ptr(row)
-				current = begin + col - col_ind(begin)
-				if (current /= 0) then
-					mass_nonzeros(current) = 0.
-				end if
-			end if
+			call setValueSymmetric(nonzeros, row, col, 0.0d0)
 		end do
-		begin = row_ptr(row)
-		current = begin + row - col_ind(begin)
-		mass_nonzeros(current) = 1.
+		call setValueSymmetric(nonzeros, row, row, 1.0d0)
 		F(row) = 0.
 	end do
 	call ma57ds(mass_nonzeros, nn*nsd+nel, F, an)
@@ -266,16 +238,7 @@ subroutine dynamics(filepath)
 			do i = 1, nn*nsd+nel
 				R(i) = 0.0
 				do j = 1, nn*nsd+nel
-					if (j >= i) then
-						begin = row_ptr(i)
-						current = begin + j - col_ind(begin)
-					else
-						begin = row_ptr(j)
-						current = begin + i - col_ind(begin)
-					end if
-					if (current /= 0) then
-						R(i) = R(i) + mass_nonzeros(current)*an1(j)
-					end if
+					R(i) = R(i) + getValueSymmetric(nonzeros, i, j)*an1(j)
 				end do
 				R(i) = R(i) - F(i)
 			end do
@@ -283,18 +246,14 @@ subroutine dynamics(filepath)
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				begin = row_ptr(i)
-				current = begin + i - col_ind(begin)
-				nonzeros(current) = nonzeros(current) + penalty
+				call addValueSymmetric(nonzeros, i, i, penalty)
 				R(row) = R(row) + penalty*constraint(i)
 			end do
 			do i = 1, no_nonzeros
 				nonzeros(i) = nonzeros(i) + mass_nonzeros(i)/beta*dt**2
 			end do
 			do i = 1, nn*nsd
-				begin = row_ptr(i)
-				current = begin + i - col_ind(begin)
-				nonzeros(current) = nonzeros(current) + damp*gamma*dt
+				call addValueSymmetric(nonzeros, i, i, damp*gamma*dt)
 			end do
 			! Solve
 			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)

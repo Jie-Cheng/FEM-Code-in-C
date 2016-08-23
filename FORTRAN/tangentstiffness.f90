@@ -28,7 +28,7 @@ contains
 		real(8), dimension(nsd,nsd) :: dxdxi, dxidx, F, Finv, B, eye
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
-		integer :: ele,a,i,npt,j,row,intpt,l,d,k,col,pos,begin,current
+		integer :: ele,a,i,npt,j,row,intpt,l,d,k,col,pos
 		real(8) :: det, Ja, pressure
 		real(8), dimension(nsd) :: work ! for lapack inverse
 		integer, dimension(nsd) :: ipiv ! for lapack inverse
@@ -143,26 +143,16 @@ contains
 					do d = 1, nen
 						do k = 1, nsd
 							col = nsd*(connect(d, ele) - 1) + k
-							if (col >= row) then
-								begin = row_ptr(row)
-								current = begin + col - col_ind(begin)
-								nonzeros(current) = nonzeros(current) + kint(nsd*(a-1)+i,nsd*(d-1)+k)
-							end if
+							call addValueSymmetric(nonzeros, row, col, kint(nsd*(a-1)+i,nsd*(d-1)+k))
 						end do
 					end do
 					col = nsd*nn + ele
-					if (col >= row) then
-						begin = row_ptr(row)
-						current = begin + col - col_ind(begin)
-						nonzeros(current) = nonzeros(current) + kint(nsd*(a-1)+i,nsd*nen+1)
-					end if
+					call addValueSymmetric(nonzeros, row, col, kint(nsd*(a-1)+i,nsd*nen+1))
 				end do
 			end do
 			row = nn*nsd + ele
 			col = nn*nsd + ele
-			begin = row_ptr(row)
-			current = begin + col - col_ind(begin)
-			nonzeros(current) = nonzeros(current) + kint(nsd*nen+1,nsd*nen+1)
+			call addValueSymmetric(nonzeros, row, col, kint(nsd*nen+1,nsd*nen+1))
 		end do
 		deallocate(xilist)
 		deallocate(weights)
