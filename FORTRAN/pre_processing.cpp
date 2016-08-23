@@ -885,7 +885,7 @@ void writeCRS_v2()
 void test()
 {
     std::ifstream ifs("coords.txt");
-    ifs >> nn >> nsd;
+    ifs >> nsd >> nn;
     ifs.close();
 
     ifs.open("connect.txt");
