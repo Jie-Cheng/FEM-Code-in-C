@@ -3,7 +3,7 @@ module symmetric_solver
 	
 contains
 	subroutine ma57ds(nonzeros, ndofs, R, dw)
-		use read_file, only: irn, jcn, no_nonzeros
+		use read_file, only: row_ind, col_ind, no_nonzeros
 		implicit none
 		integer, intent(in) :: ndofs
 		real(8), dimension(no_nonzeros), intent(in) :: nonzeros
@@ -33,7 +33,7 @@ contains
 		lkeep = 7*n + ne + max(n, ne) + 42
 		allocate(keep(lkeep))
 		allocate(iwork(5*n))
-		call MA57AD(n, ne, irn, jcn, lkeep, keep, iwork, icntl, info, rinfo)
+		call MA57AD(n, ne, row_ind, col_ind, lkeep, keep, iwork, icntl, info, rinfo)
 		! Factorize matrix
 		lfact = 2*info(9)
 		allocate(fact(lfact))

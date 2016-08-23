@@ -18,7 +18,7 @@ contains
 		real(8), allocatable, dimension(:,:) :: xilist
 		real(8), allocatable, dimension(:) :: weights
 		real(8), dimension(nen) :: N
-		integer :: ele,a,b,i,j,npt,k,intpt,row,col,pos
+		integer :: ele,a,b,i,j,npt,k,intpt,row,col,begin,current
 		real(8) :: det, rho
 		real(8), dimension(nsd) :: xi
 		real(8), dimension(nen,nsd) :: dNdxi 
@@ -77,9 +77,9 @@ contains
 						do k=1,nsd
 							col = nsd*(connect(b,ele)-1)+k
 							if (col >= row) then
-								pos = position(row, col, nn*nsd+nel)
-								pos = map(pos)
-								mass_nonzeros(pos) = mass_nonzeros(pos) + mele(nsd*(a-1)+i,nsd*(b-1)+k)
+								begin = row_ptr(row)
+								current = begin + col - col_ind(begin)
+								mass_nonzeros(current) = mass_nonzeros(current) + mele(nsd*(a-1)+i,nsd*(b-1)+k)
 		                    end if
 						end do
 					end do

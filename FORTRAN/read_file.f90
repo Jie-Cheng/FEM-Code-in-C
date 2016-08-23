@@ -11,7 +11,7 @@ module read_file
 	integer, allocatable :: share(:)
 	
 	integer :: no_nonzeros
-	integer, allocatable :: irn(:), jcn(:), map(:)
+	integer, allocatable :: col_ind(:), row_ptr(:), row_ind(:)
 	real(8), allocatable :: nonzeros(:)
 	
 	save
@@ -130,119 +130,109 @@ contains
 	
 	end subroutine read_mesh
 	
-	function position(row, col, ndofs)
+	subroutine read_CRS(no_nonzeros, col_ind, row_ind, nonzeros, row_ptr)
+		! Assuming the input CRS matrix is a full matrix
 		implicit none
-		integer, intent(in) :: row, col, ndofs
-		integer :: position
-		position = (2*ndofs - row + 2)*(row - 1)/2 + col - row + 1
-	end function position
-	
-	subroutine initial_compress(ndofs, no_nonzeros, irn, jcn, map, nonzeros)
-		implicit none
-		integer, intent(in) :: ndofs
 		integer, intent(inout) :: no_nonzeros
-		integer, allocatable, intent(inout) :: irn(:), jcn(:), map(:)
+		integer, allocatable, intent(inout) :: col_ind(:), row_ind(:), row_ptr(:)
 		real(8), allocatable, intent(inout) :: nonzeros(:)
 		
-		integer, allocatable :: flag(:)
-		integer :: i, j, a, b, row, col, ele, pos, n, count, maxsize
+		integer :: no_rows, i, j, k, full_no_nonzeros, row, col
+		integer, allocatable :: full_col_ind(:), full_row_ptr(:), full_row_ind(:)
 		
-		no_nonzeros = 0
-		count = 0		
-		maxsize = (ndofs**2 + ndofs)/2
+		open(unit=42, form='unformatted', access='stream', file='CRS_v1.bin')
+		read(42) full_no_nonzeros
+	
+		allocate(full_col_ind(full_no_nonzeros))
+		read(42) full_col_ind
+		read(42) no_rows
+		allocate(full_row_ptr(no_rows))
+		read(42) full_row_ptr
+		close(42)
+		allocate(full_row_ind(full_no_nonzeros))
 		
-		allocate(map( maxsize ))
-		allocate(flag( maxsize ))
-		map = 0
-		flag = 0
+		if (no_rows /= nn*nsd + nel + 1) then
+			write(*, *) 'Wrong length of row_ptr in CRS input data!'
+			stop
+		end if
 		
-		! Count the no_nonzeros in the upper triangle
-		do ele = 1, nel
-			do a = 1, nen
-				do i = 1, nsd
-					row = nsd*(connect(a, ele) - 1) + i
-					do b = 1, nen
-						do j = 1, nsd
-							col = nsd*(connect(b, ele) - 1) + j
-							if (col >= row) then
-								pos = position(row, col, ndofs)
-								map(pos) = 1
-							end if
-						end do
-					end do
-					col = nsd*nn + ele
-					if (col >= row) then
-						pos = position(row, col, ndofs)
-						map(pos) = 1
-					end if
-				end do
+		k = 0
+		do i = 2, no_rows
+			! The (i-1)th row has full_row_ptr(i) - full_row_ptr(i-1) entries
+			! every entry has a full_row_ind of i-1
+			do j = 1, full_row_ptr(i) - full_row_ptr(i-1)
+				k = k + 1
+				full_row_ind(k) = i - 1
 			end do
-			row = nsd*nn + ele
-			col = nsd*nn + ele
-			pos = position(row, col, ndofs)
-			map(pos) = 1
 		end do
 		
-		do i = 1, maxsize
-			if (map(i) == 1) then
+		if (k /= full_no_nonzeros) then
+			write(*, *) 'Wrong length of full_row_ind!'
+			stop 
+		end if
+		
+		! Truncate the matrix, only keep the upper triangle
+		no_nonzeros = 0
+		do k = 1, full_no_nonzeros
+			col = full_col_ind(k)
+			row = full_row_ind(k)
+			if (col >= row) then
 				no_nonzeros = no_nonzeros + 1
 			end if
 		end do
 		
-		allocate(nonzeros(no_nonzeros))
-		allocate(irn(no_nonzeros))
-		allocate(jcn(no_nonzeros))
+		if ((full_no_nonzeros + no_rows - 1)/2 /= no_nonzeros) then
+			write(*, *) 'Wrong no_nonzeros!'
+			stop
+		end if
 		
-		! Modify map so that map(pos) gives the number in the nonzeros
-		! flag is used to indicate whether a pos has been taken before
-		do ele = 1, nel
-			do a = 1, nen
-				do i = 1, nsd
-					row = nsd*(connect(a, ele) - 1) + i
-					do b = 1, nen
-						do j = 1, nsd
-							col = nsd*(connect(b, ele) - 1) + j
-							if (col >= row) then
-								pos = position(row, col, ndofs)
-								if (flag(pos) /= 1) then
-									count = count + 1
-									map(pos) = count
-									irn(count) = row
-									jcn(count) = col
-									flag(pos) = 1
-								end if
-							end if
-						end do
-					end do
-					col = nsd*nn + ele
-					if (col >= row) then
-						pos = position(row, col, ndofs)
-						if (flag(pos) /= 1) then
-							count = count + 1
-							map(pos) = count
-							irn(count) = row
-							jcn(count) = col
-							flag(pos) = 1
-						end if
-					end if
-				end do
-			end do
-			row = nsd*nn + ele
-			col = nsd*nn + ele
-			pos = position(row, col, ndofs)
-			if (flag(pos) /= 1) then
-				count = count + 1
-				map(pos) = count
-				irn(count) = row
-				jcn(count) = col
-				flag(pos) = 1
+		allocate(col_ind(no_nonzeros))
+		allocate(row_ind(no_nonzeros))
+		allocate(nonzeros(no_nonzeros))
+		allocate(row_ptr(no_rows))
+		row_ptr = 0
+		
+		i = 0
+		do k = 1, full_no_nonzeros
+			col = full_col_ind(k)
+			row = full_row_ind(k)
+			if (col >= row) then
+				i = i + 1
+				col_ind(i) = col
+				row_ind(i) = row
 			end if
 		end do
 		
-		nonzeros = 0.0
+		if (i /= no_nonzeros) then
+			write(*, *) 'Wrong length of col_ind and row_ind!'
+			stop
+		end if
 		
-		deallocate(flag)
+		i = 1
+		row_ptr(1) = full_row_ptr(1)
+		do k = 2, no_nonzeros
+			if (row_ind(k) /= row_ind(k-1)) then
+				i = i + 1
+				row_ptr(i) = k
+			end if
+		end do
+		row_ptr(i+1) = no_nonzeros + 1
 		
-	end subroutine initial_compress
+		if (i + 1 /= no_rows) then
+			write(*, *) 'Wrong length of row_ptr!'
+			stop
+		end if
+		
+		do i = 1, no_rows - 1
+			if (row_ind(row_ptr(i)) /= i .or. row_ind(row_ptr(i)) /= i ) then
+				write(*, *) 'Missing diagonal entry!'
+				stop
+			end if
+		end do
+		
+		deallocate(full_col_ind)
+		deallocate(full_row_ind)
+		deallocate(full_row_ptr)
+	end subroutine read_CRS
 	
 end module read_file

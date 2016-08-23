@@ -209,8 +209,8 @@ int Debug() {
 	Mat Adj;
 	int mlocal = nel/2;
 	int n = nel;
-	int ia
+	int ia;
 	
-	ierr = MatDestroy(&A); CHKERRQ(ierr);
+	//ierr = MatDestroy(&A); CHKERRQ(ierr);
 	return 0;
 }

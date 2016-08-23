@@ -20,7 +20,7 @@ program solidsolver
 		materialtype, materialprops, gravity, isbinary, penalty)
 	call read_mesh(nsd, nn, nel, nen, coords, connect, bc_size, bc_num, bc_val, &
 		load_size, load_type, load_num, load_val, share)
-	call initial_compress(nn*nsd+nel, no_nonzeros, irn, jcn, map, nonzeros)
+	call read_CRS(no_nonzeros, col_ind, row_ind, nonzeros, row_ptr)
 	if (mode == 0) then 
 		call statics(filepath)
 		!call debug()
@@ -57,7 +57,7 @@ subroutine statics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k, pos
+	integer :: i, nit, row, col, j, k, pos, begin, current, flag
 	real(8), allocatable, dimension(:) :: Fext, Fint, R, w, w1, dw
 	real(8) :: loadfactor, increment, err1, err2
 	real(8), dimension(bc_size) :: constraint
@@ -73,6 +73,7 @@ subroutine statics(filepath)
 	! initialize w
 	w = 0.
 	constraint = 0.
+	flag = 0
 	
 	nprint = 1
 	nsteps = 1
@@ -99,6 +100,7 @@ subroutine statics(filepath)
 		nit = 0
 		write(*,'(A, A, i5, 5x, A, e12.4, A)') repeat('=', 30), 'Step', step, 'Load', loadfactor, repeat('=', 36)
 		do while (((err1 > tol) .or. (err2 > tol)) .and. (nit < maxit))
+			flag = flag + 1
 			nit = nit + 1
 			call force_internal(w, Fint)
 			! If the external load is pressure, update the external force
@@ -111,11 +113,12 @@ subroutine statics(filepath)
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				pos = position(row, row, nn*nsd+nel)
-				pos = map(pos)
-				nonzeros(pos) = nonzeros(pos) + penalty
+				begin = row_ptr(row)
+				current = begin + row - col_ind(begin)
+				nonzeros(current) = nonzeros(current) + penalty
 				R(row) = R(row) + penalty*constraint(i)
 			end do
+			call test(flag)
 			! Solve
 			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)
 			w = w + dw
@@ -147,6 +150,20 @@ subroutine statics(filepath)
 	
 end subroutine statics
 
+subroutine test(flag)
+	use read_file, only: no_nonzeros, nonzeros, row_ind, col_ind
+	implicit none
+	integer, intent(in) :: flag
+	integer :: i
+	if (flag == 1) then
+		open(unit=42, file='CRS_pattern.txt', form='formatted')
+		write(42, '(i8)') no_nonzeros
+		do i = 1, no_nonzeros
+			write(42, '(i8, i8, e15.3)'), row_ind(i), col_ind(i), nonzeros(i)
+		end do
+	end if
+end subroutine test
+
 subroutine dynamics(filepath)
 		
 	use read_file
@@ -163,7 +180,7 @@ subroutine dynamics(filepath)
 	
 	implicit none
 	
-	integer :: i, nit, row, col, j, k, pos
+	integer :: i, nit, row, col, j, k, begin, current
 	real(8), allocatable, dimension(:) :: Fext, Fint, F, R, un, un1, vn, vn1, an, an1, w, dw, mass_nonzeros
 	real(8) :: loadfactor, increment, err1, err2, gamma, beta
 	real(8), dimension(bc_size) :: constraint
@@ -214,16 +231,16 @@ subroutine dynamics(filepath)
 		row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 		do col = 1, nn*nsd
 			if (col >= row) then
-				pos = position(row, col, nn*nsd+nel)
-				pos = map(pos)
-				if (pos /= 0) then
-					mass_nonzeros(pos) = 0.
+				begin = row_ptr(row)
+				current = begin + col - col_ind(begin)
+				if (current /= 0) then
+					mass_nonzeros(current) = 0.
 				end if
 			end if
 		end do
-		pos = position(row, row, nn*nsd+nel)
-		pos = map(pos)
-		mass_nonzeros(pos) = 1.
+		begin = row_ptr(row)
+		current = begin + row - col_ind(begin)
+		mass_nonzeros(current) = 1.
 		F(row) = 0.
 	end do
 	call ma57ds(mass_nonzeros, nn*nsd+nel, F, an)
@@ -250,14 +267,14 @@ subroutine dynamics(filepath)
 				R(i) = 0.0
 				do j = 1, nn*nsd+nel
 					if (j >= i) then
-						pos = position(i, j, nn*nsd+nel)
-						pos = map(pos)
+						begin = row_ptr(i)
+						current = begin + j - col_ind(begin)
 					else
-						pos = position(j, i, nn*nsd+nel)
-						pos = map(pos)
+						begin = row_ptr(j)
+						current = begin + i - col_ind(begin)
 					end if
-					if (pos /= 0) then
-						R(i) = R(i) + mass_nonzeros(pos)*an1(j)
+					if (current /= 0) then
+						R(i) = R(i) + mass_nonzeros(current)*an1(j)
 					end if
 				end do
 				R(i) = R(i) - F(i)
@@ -266,18 +283,18 @@ subroutine dynamics(filepath)
 			do i = 1, bc_size
 				row = nsd*(bc_num(1, i) - 1) + bc_num(2, i)
 				constraint(i) = w(row) - bc_val(i)
-				pos = position(row, row, nn*nsd+nel)
-				pos = map(pos)
-				nonzeros(pos) = nonzeros(pos) + penalty
+				begin = row_ptr(i)
+				current = begin + i - col_ind(begin)
+				nonzeros(current) = nonzeros(current) + penalty
 				R(row) = R(row) + penalty*constraint(i)
 			end do
 			do i = 1, no_nonzeros
 				nonzeros(i) = nonzeros(i) + mass_nonzeros(i)/beta*dt**2
 			end do
 			do i = 1, nn*nsd
-				pos = position(i, i, nn*nsd+nel)
-				pos = map(pos)
-				nonzeros(pos) = nonzeros(pos) + damp*gamma*dt
+				begin = row_ptr(i)
+				current = begin + i - col_ind(begin)
+				nonzeros(current) = nonzeros(current) + damp*gamma*dt
 			end do
 			! Solve
 			call ma57ds(nonzeros, nn*nsd+nel, -R, dw)
